@@ -68,6 +68,15 @@ agentic/secrets/*.pfx
 *.sqlite
 *.sqlite3
 
+# ChromaDB
+chroma_db/
+**/chroma_db/
+tests/**/chroma_db/
+
+# LangGraph Checkpoints
+checkpoints.db
+*.db
+
 # Logs
 *.log
 logs/

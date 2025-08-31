@@ -306,36 +306,34 @@ class TestMasterGraphBuilder:
             
             logger.info(f"📄 Processing long paragraph ({len(long_paragraph)} characters)")
             
-            # Step 1: Chunk the document
-            logger.info("🔪 Step 1: Chunking document...")
-            state = real_graph_builder.chunk_doc_node(state)
+            # Build the graph with checkpointer
+            graph = real_graph_builder.build()
             
-            assert state.chunks is not None
-            assert len(state.chunks) > 1  # Should be split into multiple chunks
-            logger.info(f"✅ Chunked into {len(state.chunks)} chunks")
+            # Step 1: Run the complete ingestion workflow with checkpointer
+            logger.info("🔪 Step 1: Running ingestion workflow...")
+            result = graph.invoke(state, config={"configurable": {"thread_id": "test_thread_1"}})
+            
+            # LangGraph returns a dict when using checkpointer
+            assert result["chunks"] is not None
+            assert len(result["chunks"]) > 1  # Should be split into multiple chunks
+            logger.info(f"✅ Chunked into {len(result['chunks'])} chunks")
             
             # Verify chunk sizes are reasonable
-            chunk_sizes = [len(chunk) for chunk in state.chunks]
+            chunk_sizes = [len(chunk) for chunk in result["chunks"]]
             logger.info(f"📊 Chunk sizes: min={min(chunk_sizes)}, max={max(chunk_sizes)}, avg={sum(chunk_sizes)/len(chunk_sizes):.1f}")
             
-            # Step 2: Generate embeddings
-            logger.info("🔤 Step 2: Generating embeddings...")
-            state = real_graph_builder.embed_node(state)
-            
-            assert state.embeddings is not None
-            assert len(state.embeddings) == len(state.chunks)
-            logger.info(f"✅ Generated {len(state.embeddings)} embeddings")
+            # Verify embeddings were generated
+            assert result["embeddings"] is not None
+            assert len(result["embeddings"]) == len(result["chunks"])
+            logger.info(f"✅ Generated {len(result['embeddings'])} embeddings")
             
             # Verify embedding dimensions
-            embedding_dims = [len(emb) for emb in state.embeddings]
+            embedding_dims = [len(emb) for emb in result["embeddings"]]
             assert all(dim == embedding_dims[0] for dim in embedding_dims)  # All should have same dimensions
             logger.info(f"🔤 Embedding dimensions: {embedding_dims[0]}")
             
-            # Step 3: Store in ChromaDB
-            logger.info("💾 Step 3: Storing in ChromaDB...")
-            state = real_graph_builder.store_node(state)
-            
-            assert state.status != "error"
+            # Verify storage was successful
+            assert result["status"] == "stored"
             logger.info(f"✅ Stored successfully in ChromaDB")
             
             # Verify vectorstore was created and populated
@@ -352,36 +350,30 @@ class TestMasterGraphBuilder:
                 messages=[{"role": "user", "content": "What is the Smart Second Brain system?"}]
             )
             
-            # Run retrieval
-            query_state = real_graph_builder.retriever_node(query_state)
-            
-            assert query_state.retrieved_docs is not None
-            assert len(query_state.retrieved_docs) > 0
-            logger.info(f"✅ Retrieved {len(query_state.retrieved_docs)} relevant documents")
-            
-            # Test answer generation
+            # Run the complete query workflow with checkpointer
             logger.info("🤖 Step 5: Testing answer generation...")
-            query_state = real_graph_builder.answer_gen_node(query_state)
+            query_result = graph.invoke(query_state, config={"configurable": {"thread_id": "test_thread_2"}})
             
-            assert query_state.generated_answer is not None
-            assert len(query_state.generated_answer) > 50
-            logger.info(f"✅ Generated answer: {query_state.generated_answer[:100]}...")
+            # LangGraph returns a dict when using checkpointer
+            assert query_result["retrieved_docs"] is not None
+            assert len(query_result["retrieved_docs"]) > 0
+            logger.info(f"✅ Retrieved {len(query_result['retrieved_docs'])} relevant documents")
             
-            # Complete the workflow
-            query_state = real_graph_builder.human_review_node(query_state)
-            query_state = real_graph_builder.validated_store_node(query_state)
+            assert query_result["generated_answer"] is not None
+            assert len(query_result["generated_answer"]) > 50
+            logger.info(f"✅ Generated answer: {query_result['generated_answer'][:100]}...")
             
-            assert query_state.status == "validated"
+            assert query_result["status"] == "validated"
             logger.info("✅ Complete workflow successful!")
             
             # Summary
             logger.info(f"📊 Workflow Summary:")
             logger.info(f"   - Input: {len(long_paragraph)} characters")
-            logger.info(f"   - Chunks: {len(state.chunks)}")
-            logger.info(f"   - Embeddings: {len(state.embeddings)}")
+            logger.info(f"   - Chunks: {len(result['chunks'])}")
+            logger.info(f"   - Embeddings: {len(result['embeddings'])}")
             logger.info(f"   - Embedding dimensions: {embedding_dims[0]}")
-            logger.info(f"   - Retrieved docs: {len(query_state.retrieved_docs)}")
-            logger.info(f"   - Final status: {query_state.status}")
+            logger.info(f"   - Retrieved docs: {len(query_result['retrieved_docs'])}")
+            logger.info(f"   - Final status: {query_result['status']}")
             
         except Exception as e:
             pytest.fail(f"Long paragraph workflow test failed: {e}")
@@ -629,7 +621,7 @@ class TestMasterGraphBuilder:
                 
                 # Run ingestion workflow
                 compiled_graph = real_graph_builder.build()
-                result = compiled_graph.invoke(state)
+                result = compiled_graph.invoke(state, config={"configurable": {"thread_id": f"test_thread_{i}"}})
                 
                 # LangGraph returns a dict, not a KnowledgeState object
                 assert result["status"] == "stored"
@@ -652,7 +644,7 @@ class TestMasterGraphBuilder:
             real_graph_builder.retriever = retriever
             
             # Run query workflow
-            result = compiled_graph.invoke(query_state)
+            result = compiled_graph.invoke(query_state, config={"configurable": {"thread_id": "test_query_thread"}})
             
             # LangGraph returns a dict, not a KnowledgeState object
             assert result["status"] == "validated"
@@ -732,7 +724,7 @@ class TestMasterGraphBuilder:
             
             # Run ingestion
             compiled_graph = real_graph_builder.build()
-            result = compiled_graph.invoke(state)
+            result = compiled_graph.invoke(state, config={"configurable": {"thread_id": "test_workflow_thread"}})
             
             # LangGraph returns a dict, not a KnowledgeState object
             assert result["status"] == "stored"
@@ -751,7 +743,7 @@ class TestMasterGraphBuilder:
             retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
             real_graph_builder.retriever = retriever
             
-            result = compiled_graph.invoke(query_state)
+            result = compiled_graph.invoke(query_state, config={"configurable": {"thread_id": "test_workflow_query_thread"}})
             
             # LangGraph returns a dict, not a KnowledgeState object
             assert result["status"] == "validated"
@@ -816,7 +808,7 @@ class TestMasterGraphBuilder:
                 )
                 
                 compiled_graph = real_graph_builder.build()
-                result = compiled_graph.invoke(state)
+                result = compiled_graph.invoke(state, config={"configurable": {"thread_id": f"benchmark_thread_{i}"}})
                 
                 # LangGraph returns a dict, not a KnowledgeState object
                 assert result["status"] == "stored"
@@ -836,7 +828,7 @@ class TestMasterGraphBuilder:
                 messages=[{"role": "user", "content": "What are the key features of AI systems?"}]
             )
             
-            result = compiled_graph.invoke(query_state)
+            result = compiled_graph.invoke(query_state, config={"configurable": {"thread_id": "benchmark_query_thread"}})
             
             query_time = time.time() - start_time
             logger.info(f"⏱️  Query time: {query_time:.2f} seconds")

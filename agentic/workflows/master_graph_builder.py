@@ -1,5 +1,6 @@
 from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.checkpoint.memory import MemorySaver
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from ..core.knowledge_state import KnowledgeState
@@ -35,6 +36,8 @@ class MasterGraphBuilder:
         self.retriever = retriever
         self.vectorstore = vectorstore
         self.chromadb_dir = chromadb_dir or "./chroma_db"
+        self.checkpointer = MemorySaver()
+
 
     # --- Node Methods ---
     def input_router(self, state: KnowledgeState):
@@ -208,4 +211,4 @@ class MasterGraphBuilder:
         graph.add_edge("review", "validated_store")
         graph.add_edge("validated_store", END)
 
-        return graph.compile()
+        return graph.compile(checkpointer=self.checkpointer)
