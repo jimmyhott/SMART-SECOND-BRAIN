@@ -1,21 +1,25 @@
-# SmartSecondBrain
+# Smart Second Brain
 
-A comprehensive Smart Second Brain platform with AI-powered knowledge management and modern web interface.
+A comprehensive AI-powered knowledge management platform with intelligent document processing, knowledge extraction, and modern web interface.
 
 ## 🚀 Features
 
 - **FastAPI Backend**: High-performance REST API with automatic documentation
 - **AI-Powered Knowledge Management**: Intelligent document processing and knowledge extraction
-- **Smart Agents**: AI-powered agents for knowledge processing and insights
+- **Smart Agents**: AI-powered agents for knowledge processing and insights using LangGraph
 - **Knowledge Graph**: Intelligent connections and relationships between information
-- **Portfolio Tracking**: Personal portfolio management
-- **Alerts & Notifications**: Price alerts and market notifications
+- **Azure OpenAI Integration**: Full support for Azure OpenAI with automatic deployment detection
+- **Vector Database**: Chroma vector store for semantic search and document retrieval
+- **Modern Python**: Pathlib for cross-platform path handling, type hints, and modern Python practices
+- **Comprehensive Testing**: Unit tests with mocked components and integration tests with real APIs
+- **Centralized Logging**: Project-level logging configuration with file and console output
 
 ## 📋 Requirements
 
-- Python 3.9+
+- Python 3.12+
 - PostgreSQL 13+
 - Redis 6+
+- Azure OpenAI Service (for AI features)
 - Node.js 18+ (for frontend - coming soon)
 
 ## 🛠️ Installation
@@ -24,8 +28,8 @@ A comprehensive Smart Second Brain platform with AI-powered knowledge management
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/jimmyhott/CryptoAnalyst.git
-   cd CryptoAnalyst
+   git clone https://github.com/jimmyhott/smart-second-brain.git
+   cd smart-second-brain
    ```
 
 2. **Create virtual environment**
@@ -45,10 +49,23 @@ A comprehensive Smart Second Brain platform with AI-powered knowledge management
    # Edit .env with your database and API credentials
    ```
 
-5. **Database Setup**
+5. **Environment Configuration**
+   ```bash
+   # Copy and configure environment variables
+   cp .env.example .env
+   
+   # Required environment variables for AI features:
+   # OPENAI_API_KEY=your-openai-api-key
+   # AZURE_OPENAI_ENDPOINT_URL=https://your-resource.openai.azure.com/
+   # LLM_MODEL=gpt-4o
+   # API_VERSION=2024-12-01-preview
+   # EMBEDDING_MODEL=text-embedding-ada-002
+   ```
+
+6. **Database Setup**
    ```bash
    # Create PostgreSQL database
-   createdb crypto_analyst
+   createdb smart_second_brain
    
    # Run migrations
    alembic upgrade head
@@ -70,7 +87,7 @@ npm run dev
 ## 🏗️ Project Structure
 
 ```
-CryptoAnalyst/
+SMART-SECOND-BRAIN/
 ├── api/                           # FastAPI backend
 │   ├── __init__.py
 │   ├── main.py                    # FastAPI application entry point
@@ -106,36 +123,65 @@ CryptoAnalyst/
 │   └── utils/                     # Utility functions
 │       ├── __init__.py
 │       └── helpers.py             # Helper functions
-├── tests/                          # Test suite
+├── agentic/                       # AI Agent System
+│   ├── agents/                    # AI agents
+│   ├── core/                      # Core agent components
+│   │   └── knowledge_state.py     # LangGraph state management
+│   ├── workflows/                 # LangGraph workflows
+│   │   └── master_graph_builder.py # Main knowledge processing workflow
+│   ├── tools/                     # Agent tools
+│   └── prompts/                   # Agent prompts
+├── shared/                        # Shared utilities
+│   ├── config/                    # Shared configuration
+│   ├── models/                    # Shared models
+│   └── utils/                     # Shared utilities
+│       └── logging_config.py      # Centralized logging configuration
+├── tests/                         # Test suite
 │   ├── __init__.py
-│   ├── conftest.py                 # Test configuration
-│   ├── test_api/                   # API tests
-│   ├── test_services/              # Service tests
-│   └── test_utils/                 # Utility tests
-├── alembic/                        # Database migrations
+│   ├── conftest.py                # Test configuration
+│   ├── test_api/                  # API tests
+│   ├── test_services/             # Service tests
+│   │   └── test_master_graph_builder.py # AI workflow tests
+│   └── test_utils/                # Utility tests
+├── alembic/                       # Database migrations
 │   ├── versions/
 │   ├── env.py
 │   └── alembic.ini
-├── frontend/                       # Frontend application (coming soon)
-├── pyproject.toml                  # Project configuration
-├── .env.example                    # Environment variables template
-├── .gitignore                      # Git ignore rules
-└── README.md                       # This file
+├── frontend/                      # Frontend application (coming soon)
+├── pyproject.toml                 # Project configuration
+├── .env.example                   # Environment variables template
+├── .gitignore                     # Git ignore rules
+└── README.md                      # This file
 ```
 
 ## 🔧 Development
 
 ### Running Tests
 ```bash
+# Run all tests
 pytest
-pytest --cov=src/crypto_analyst --cov-report=html
+
+# Run unit tests only (mocked components)
+pytest -m unit
+
+# Run integration tests only (real APIs)
+pytest -m integration
+
+# Run with coverage
+pytest --cov=api --cov=agentic --cov=shared --cov-report=html
+
+# Run specific test file
+pytest tests/test_services/test_master_graph_builder.py
+
+# Run API connection test
+python test_openai_connection.py
 ```
 
 ### Code Formatting
 ```bash
-black src/ tests/
-ruff check src/ tests/
-mypy src/
+black api/ agentic/ shared/ tests/
+ruff check api/ agentic/ shared/ tests/
+mypy api/ agentic/ shared/
 ```
 
 ### Database Migrations
@@ -169,7 +215,7 @@ Create a `.env` file with the following variables:
 
 ```env
 # Database
-DATABASE_URL=postgresql://user:password@localhost/crypto_analyst
+DATABASE_URL=postgresql://user:password@localhost/smart_second_brain
 
 # Security
 SECRET_KEY=your-secret-key-here
@@ -178,6 +224,13 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 
 # Redis
 REDIS_URL=redis://localhost:6379
+
+# AI/LLM Configuration
+OPENAI_API_KEY=your-openai-api-key-here
+AZURE_OPENAI_ENDPOINT_URL=https://your-resource.openai.azure.com/
+LLM_MODEL=gpt-4o
+API_VERSION=2024-12-01-preview
+EMBEDDING_MODEL=text-embedding-ada-002
 
 # External APIs
 COINAPI_KEY=your-coinapi-key
@@ -202,9 +255,31 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+## 🧪 Testing
+
+### Test Categories
+
+- **Unit Tests**: Fast, isolated tests with mocked components
+- **Integration Tests**: End-to-end tests with real Azure OpenAI APIs
+- **API Tests**: FastAPI endpoint testing
+- **Service Tests**: Business logic testing
+
+### Test Configuration
+
+Tests use pytest markers:
+- `@pytest.mark.unit` - Unit tests (mocked)
+- `@pytest.mark.integration` - Integration tests (real APIs)
+
+### Logging
+
+All tests use centralized logging configuration:
+- Console output for immediate feedback
+- File output in `logs/` directory for debugging
+- Different log levels for different test types
+
 ## 📞 Support
 
 For support and questions:
 - Create an issue on GitHub
-- Email: support@cryptoanalyst.com
-- Discord: [Join our community](https://discord.gg/cryptoanalyst)
+- Email: support@smartsecondbrain.com
+- Discord: [Join our community](https://discord.gg/smartsecondbrain)
