@@ -61,7 +61,7 @@ A comprehensive AI-powered knowledge management platform with intelligent docume
    # AZURE_OPENAI_ENDPOINT_URL=https://your-resource.openai.azure.com/
    # LLM_MODEL=gpt-4o
    # API_VERSION=2024-12-01-preview
-   # EMBEDDING_MODEL=text-embedding-ada-002
+   # EMBEDDING_MODEL=text-embedding-3-small
    ```
 
 6. **Database Setup**
@@ -232,7 +232,7 @@ OPENAI_API_KEY=your-openai-api-key-here
 AZURE_OPENAI_ENDPOINT_URL=https://your-resource.openai.azure.com/
 LLM_MODEL=gpt-4o
 API_VERSION=2024-12-01-preview
-EMBEDDING_MODEL=text-embedding-ada-002
+EMBEDDING_MODEL=text-embedding-3-small
 
 # External APIs
 COINAPI_KEY=your-coinapi-key

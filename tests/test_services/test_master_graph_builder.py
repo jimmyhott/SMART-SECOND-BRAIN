@@ -34,9 +34,8 @@ from agentic.workflows.master_graph_builder import MasterGraphBuilder
 
 # Import real components for integration testing
 try:
-    from langchain_openai import ChatOpenAI, AzureChatOpenAI
+    from langchain_openai import ChatOpenAI, AzureChatOpenAI, OpenAIEmbeddings, AzureOpenAIEmbeddings
     from langchain_chroma import Chroma
-    from langchain_openai import OpenAIEmbeddings
     from langchain_text_splitters import RecursiveCharacterTextSplitter
     from langchain.schema import Document
     REAL_COMPONENTS_AVAILABLE = True
@@ -136,18 +135,19 @@ class TestMasterGraphBuilder:
                 )
             
             # Initialize embedding model
-            embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002")
+            embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
             api_version = os.getenv("API_VERSION", "2024-02-15-preview")
             
             if azure_endpoint and azure_endpoint != "https://your-resource-name.openai.azure.com/":
-                # For Azure OpenAI, construct the full API base URL for embeddings
-                azure_embeddings_base = f"{azure_endpoint.rstrip('/')}/openai/deployments/{embedding_model}"
-                logger.info(f"🔗 Using Azure embeddings base: {azure_embeddings_base}")
-                embeddings = OpenAIEmbeddings(
-                    model=embedding_model,
-                    openai_api_key=openai_api_key,
-                    openai_api_base=azure_embeddings_base,
-                    openai_api_version=api_version
+                # Use AzureOpenAIEmbeddings for Azure endpoints
+                deployment = "text-embedding-3-small"
+                logger.info(f"🔗 Using Azure OpenAI embeddings: {embedding_model}")
+                logger.info(f"🚀 Using deployment: {deployment}")
+                embeddings = AzureOpenAIEmbeddings(
+                    azure_deployment=deployment,
+                    openai_api_version=api_version,
+                    azure_endpoint=azure_endpoint,
+                    openai_api_key=openai_api_key
                 )
             else:
                 embeddings = OpenAIEmbeddings(
@@ -465,16 +465,19 @@ class TestMasterGraphBuilder:
             azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT_URL")
             
             # Get embedding model from environment
-            embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002")
+            embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+            api_version = os.getenv("API_VERSION", "2024-02-15-preview")
             
             if azure_endpoint and azure_endpoint != "https://your-resource-name.openai.azure.com/":
-                # For Azure OpenAI, construct the full API base URL for embeddings
-                azure_embeddings_base = f"{azure_endpoint.rstrip('/')}/openai/deployments/{embedding_model}"
-                logger.info(f"🔗 Using Azure embeddings base: {azure_embeddings_base}")
-                embeddings = OpenAIEmbeddings(
-                    model=embedding_model,
-                    openai_api_key=openai_api_key,
-                    openai_api_base=azure_embeddings_base
+                # Use AzureOpenAIEmbeddings for Azure endpoints
+                deployment = "text-embedding-3-small"
+                logger.info(f"🔗 Using Azure OpenAI embeddings: {embedding_model}")
+                logger.info(f"🚀 Using deployment: {deployment}")
+                embeddings = AzureOpenAIEmbeddings(
+                    azure_deployment=deployment,
+                    openai_api_version=api_version,
+                    azure_endpoint=azure_endpoint,
+                    openai_api_key=openai_api_key
                 )
             else:
                 embeddings = OpenAIEmbeddings(
@@ -543,13 +546,24 @@ class TestMasterGraphBuilder:
             openai_api_key = os.getenv("OPENAI_API_KEY")
             azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT_URL")
             
+            # Get embedding model and API version from environment
+            embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+            api_version = os.getenv("API_VERSION", "2024-02-15-preview")
+            
             if azure_endpoint and azure_endpoint != "https://your-resource-name.openai.azure.com/":
-                embeddings = OpenAIEmbeddings(
-                    openai_api_key=openai_api_key,
-                    openai_api_base=azure_endpoint
+                # Use AzureOpenAIEmbeddings for Azure endpoints
+                logger.info(f"🔗 Using Azure OpenAI embeddings: {embedding_model}")
+                embeddings = AzureOpenAIEmbeddings(
+                    azure_deployment=embedding_model,
+                    openai_api_version=api_version,
+                    azure_endpoint=azure_endpoint,
+                    openai_api_key=openai_api_key
                 )
             else:
-                embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
+                embeddings = OpenAIEmbeddings(
+                    model=embedding_model,
+                    openai_api_key=openai_api_key
+                )
             
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=100,
@@ -624,13 +638,26 @@ class TestMasterGraphBuilder:
             openai_api_key = os.getenv("OPENAI_API_KEY")
             azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT_URL")
             
+            # Get embedding model and API version from environment
+            embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+            api_version = os.getenv("API_VERSION", "2024-02-15-preview")
+            
             if azure_endpoint and azure_endpoint != "https://your-resource-name.openai.azure.com/":
-                embeddings = OpenAIEmbeddings(
-                    openai_api_key=openai_api_key,
-                    openai_api_base=azure_endpoint
+                # Use AzureOpenAIEmbeddings for Azure endpoints
+                deployment = "text-embedding-3-small"
+                logger.info(f"🔗 Using Azure OpenAI embeddings: {embedding_model}")
+                logger.info(f"🚀 Using deployment: {deployment}")
+                embeddings = AzureOpenAIEmbeddings(
+                    azure_deployment=deployment,
+                    openai_api_version=api_version,
+                    azure_endpoint=azure_endpoint,
+                    openai_api_key=openai_api_key
                 )
             else:
-                embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
+                embeddings = OpenAIEmbeddings(
+                    model=embedding_model,
+                    openai_api_key=openai_api_key
+                )
             
             vectorstore = Chroma(embedding_function=embeddings)
             real_graph_builder.vectorstore = vectorstore
