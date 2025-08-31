@@ -137,6 +137,10 @@ addopts = [
     "--cov-report=xml",
 ]
 asyncio_mode = "auto"
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "unit: marks tests as unit tests (deselect with '-m \"not unit\"')",
+]
 
 [tool.coverage.run]
 source = ["api"]

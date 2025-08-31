@@ -71,6 +71,8 @@ agentic/secrets/*.pfx
 # Logs
 *.log
 logs/
+test_*.log
+logs/*.log
 
 # Temporary files
 *.tmp

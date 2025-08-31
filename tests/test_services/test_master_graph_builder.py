@@ -8,6 +8,8 @@ including node methods, graph compilation, and workflow execution.
 import pytest
 import sys
 import os
+import tempfile
+import shutil
 from pathlib import Path
 from unittest.mock import Mock, MagicMock
 from typing import Dict, Any
@@ -93,8 +95,19 @@ class TestMasterGraphBuilder:
         )
 
     @pytest.fixture
-    def real_graph_builder(self):
-        """Create a MasterGraphBuilder instance with real components."""
+    def temp_chromadb_dir(self):
+        """Create a temporary ChromaDB directory for testing."""
+        temp_dir = tempfile.mkdtemp(prefix="test_chromadb_")
+        logger.info(f"🧪 Created temporary ChromaDB directory: {temp_dir}")
+        yield temp_dir
+        # Cleanup after test
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+            logger.info(f"🧹 Cleaned up temporary ChromaDB directory: {temp_dir}")
+
+    @pytest.fixture
+    def real_graph_builder(self, temp_chromadb_dir):
+        """Create a MasterGraphBuilder instance with real components and temporary ChromaDB."""
         if not REAL_COMPONENTS_AVAILABLE:
             pytest.skip("Real components not available")
         
@@ -106,7 +119,7 @@ class TestMasterGraphBuilder:
             pytest.skip("OPENAI_API_KEY not set in .env file")
         
         try:
-                                    # Get model name from environment
+            # Get model name from environment
             model_name = os.getenv("LLM_MODEL", "gpt-4o")
             
             # Use Azure OpenAI if endpoint is configured, otherwise use OpenAI
@@ -155,12 +168,16 @@ class TestMasterGraphBuilder:
                     openai_api_key=openai_api_key
                 )
             
-            return MasterGraphBuilder(
+            # Create MasterGraphBuilder with temporary ChromaDB directory
+            builder = MasterGraphBuilder(
                 llm=llm,
                 embedding_model=embeddings,
                 retriever=None,  # Will be set up in individual tests
-                vectorstore=None  # Will be set up in individual tests
+                vectorstore=None,  # Will be set up in individual tests
+                chromadb_dir=temp_chromadb_dir  # Use temporary directory
             )
+            
+            return builder
         except Exception as e:
             pytest.skip(f"Failed to initialize real components: {e}")
 
@@ -592,7 +609,12 @@ class TestMasterGraphBuilder:
                     openai_api_key=openai_api_key
                 )
             
-            vectorstore = Chroma(embedding_function=embeddings)
+            # Use the temporary ChromaDB directory from the fixture
+            vectorstore = Chroma(
+                collection_name="knowledge_base",
+                embedding_function=embeddings,
+                persist_directory=real_graph_builder.chromadb_dir
+            )
             
             # Update builder with real vector store
             real_graph_builder.vectorstore = vectorstore
@@ -609,11 +631,12 @@ class TestMasterGraphBuilder:
                 compiled_graph = real_graph_builder.build()
                 result = compiled_graph.invoke(state)
                 
-                assert result.status == "stored"
-                assert result.chunks is not None
-                assert result.embeddings is not None
-                assert len(result.chunks) > 0
-                assert len(result.embeddings) == len(result.chunks)
+                # LangGraph returns a dict, not a KnowledgeState object
+                assert result["status"] == "stored"
+                assert result["chunks"] is not None
+                assert result["embeddings"] is not None
+                assert len(result["chunks"]) > 0
+                assert len(result["embeddings"]) == len(result["chunks"])
                 
                 logger.info(f"✅ Document {i+1} ingested successfully")
             
@@ -631,13 +654,14 @@ class TestMasterGraphBuilder:
             # Run query workflow
             result = compiled_graph.invoke(query_state)
             
-            assert result.status == "validated"
-            assert result.generated_answer is not None
-            assert result.retrieved_docs is not None
-            assert len(result.retrieved_docs) > 0
+            # LangGraph returns a dict, not a KnowledgeState object
+            assert result["status"] == "validated"
+            assert result["generated_answer"] is not None
+            assert result["retrieved_docs"] is not None
+            assert len(result["retrieved_docs"]) > 0
             
-            logger.info(f"🔍 Retrieved {len(result.retrieved_docs)} documents")
-            logger.info(f"🤖 Generated Answer: {result.generated_answer}")
+            logger.info(f"🔍 Retrieved {len(result['retrieved_docs'])} documents")
+            logger.info(f"🤖 Generated Answer: {result['generated_answer']}")
             
         except Exception as e:
             pytest.fail(f"Real integration test failed: {e}")
@@ -677,7 +701,12 @@ class TestMasterGraphBuilder:
                 chunk_overlap=20,
                 separators=["\n\n", "\n", " ", ""]
             )
-            vectorstore = Chroma(embedding_function=embeddings)
+            # Use the temporary ChromaDB directory from the fixture
+            vectorstore = Chroma(
+                collection_name="knowledge_base",
+                embedding_function=embeddings,
+                persist_directory=real_graph_builder.chromadb_dir
+            )
             
             # Update builder
             real_graph_builder.vectorstore = vectorstore
@@ -705,11 +734,12 @@ class TestMasterGraphBuilder:
             compiled_graph = real_graph_builder.build()
             result = compiled_graph.invoke(state)
             
-            assert result.status == "stored"
-            assert result.chunks is not None
-            assert len(result.chunks) > 1  # Should be split into multiple chunks
+            # LangGraph returns a dict, not a KnowledgeState object
+            assert result["status"] == "stored"
+            assert result["chunks"] is not None
+            assert len(result["chunks"]) > 1  # Should be split into multiple chunks
             
-            logger.info(f"✅ Document split into {len(result.chunks)} chunks")
+            logger.info(f"✅ Document split into {len(result['chunks'])} chunks")
             
             # Test retrieval and answer generation
             query_state = KnowledgeState(
@@ -723,11 +753,12 @@ class TestMasterGraphBuilder:
             
             result = compiled_graph.invoke(query_state)
             
-            assert result.status == "validated"
-            assert result.generated_answer is not None
-            assert len(result.generated_answer) > 50
+            # LangGraph returns a dict, not a KnowledgeState object
+            assert result["status"] == "validated"
+            assert result["generated_answer"] is not None
+            assert len(result["generated_answer"]) > 50
             
-            logger.info(f"🤖 Final Answer: {result.generated_answer}")
+            logger.info(f"🤖 Final Answer: {result['generated_answer']}")
             
         except Exception as e:
             pytest.fail(f"Real workflow test failed: {e}")
@@ -766,7 +797,12 @@ class TestMasterGraphBuilder:
                     openai_api_key=openai_api_key
                 )
             
-            vectorstore = Chroma(embedding_function=embeddings)
+            # Use the temporary ChromaDB directory from the fixture
+            vectorstore = Chroma(
+                collection_name="knowledge_base",
+                embedding_function=embeddings,
+                persist_directory=real_graph_builder.chromadb_dir
+            )
             real_graph_builder.vectorstore = vectorstore
             
             # Benchmark ingestion
@@ -782,7 +818,8 @@ class TestMasterGraphBuilder:
                 compiled_graph = real_graph_builder.build()
                 result = compiled_graph.invoke(state)
                 
-                assert result.status == "stored"
+                # LangGraph returns a dict, not a KnowledgeState object
+                assert result["status"] == "stored"
             
             ingestion_time = time.time() - start_time
             logger.info(f"⏱️  Ingestion time for 3 documents: {ingestion_time:.2f} seconds")
@@ -804,8 +841,9 @@ class TestMasterGraphBuilder:
             query_time = time.time() - start_time
             logger.info(f"⏱️  Query time: {query_time:.2f} seconds")
             
-            assert result.status == "validated"
-            assert result.generated_answer is not None
+            # LangGraph returns a dict, not a KnowledgeState object
+            assert result["status"] == "validated"
+            assert result["generated_answer"] is not None
             
             logger.info(f"📊 Performance Summary:")
             logger.info(f"   - Ingestion: {ingestion_time:.2f}s for 3 docs")

@@ -32,13 +32,25 @@ class KnowledgeState(BaseModel):
     embeddings: Optional[List[List[float]]] = Field(
         None, description="Vector embeddings for the chunks."
     )
+
+    # Metadata fields (structured)
+    source: Optional[str] = Field(
+        None, description="Source of the document (e.g., filename, URL, transcript ID)."
+    )
+    categories: Optional[List[str]] = Field(
+        None, description="One or more categories/tags for the document."
+    )
     metadata: Optional[Dict[str, Any]] = Field(
-        None, description="Metadata about the document (source, date, tags, etc.)."
+        default_factory=dict,
+        description="Additional metadata (author, date, page, etc.)."
     )
 
     # --- Retrieval & Answering ---
     retrieved_docs: Optional[List[Dict[str, Any]]] = Field(
         None, description="Relevant documents retrieved from vector DB."
+    )
+    retrieved_chunks: Optional[List[str]] = Field(
+        None, description="Raw chunks retrieved from the vector DB."
     )
     generated_answer: Optional[str] = Field(
         None, description="AI-generated draft answer or summary."
@@ -68,5 +80,7 @@ class KnowledgeState(BaseModel):
         None, description="Pipeline status: 'pending', 'processing', 'done', 'error'."
     )
     logs: Optional[List[str]] = Field(
-        None, description="Debug logs collected during pipeline execution."
+        default_factory=list,
+        description="Debug logs collected during pipeline execution."
     )
+    

@@ -21,18 +21,20 @@ class MasterGraphBuilder:
     Encapsulates node definitions, dependencies, and graph wiring.
     """
 
-    def __init__(self, llm=None, embedding_model=None, retriever=None, vectorstore=None):
+    def __init__(self, llm=None, embedding_model=None, retriever=None, vectorstore=None, chromadb_dir=None):
         """
         Initialize dependencies.
         :param llm: LLM client (e.g., ChatOpenAI)
         :param embedding_model: Text embedding model (e.g., OpenAIEmbeddings)
         :param retriever: Document retriever (optional)
         :param vectorstore: Vector DB client (optional)
+        :param chromadb_dir: ChromaDB persistence directory (optional, defaults to "./chroma_db")
         """
         self.llm = llm
         self.embedding_model = embedding_model
         self.retriever = retriever
         self.vectorstore = vectorstore
+        self.chromadb_dir = chromadb_dir or "./chroma_db"
 
     # --- Node Methods ---
     def input_router(self, state: KnowledgeState):
@@ -93,7 +95,7 @@ class MasterGraphBuilder:
                     self.vectorstore = Chroma(
                         collection_name="knowledge_base",
                         embedding_function=self.embedding_model,
-                        persist_directory="./chroma_db"
+                        persist_directory=self.chromadb_dir
                     )
 
                 # Store categories as a string (ChromaDB doesn't accept lists in metadata)
