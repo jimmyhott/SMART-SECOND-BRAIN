@@ -18,9 +18,11 @@ A comprehensive AI-powered knowledge management platform with intelligent docume
 
 - Python 3.12+
 - PostgreSQL 13+
-- Redis 6+
 - Azure OpenAI Service (for AI features)
 - Node.js 18+ (for frontend - coming soon)
+
+**Optional:**
+- Redis 6+ (for background tasks and caching - coming soon)
 
 ## 🛠️ Installation
 
@@ -222,8 +224,8 @@ SECRET_KEY=your-secret-key-here
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 
-# Redis
-REDIS_URL=redis://localhost:6379
+# Redis (Optional - for background tasks and caching)
+# REDIS_URL=redis://localhost:6379
 
 # AI/LLM Configuration
 OPENAI_API_KEY=your-openai-api-key-here
