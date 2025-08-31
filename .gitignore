@@ -1,0 +1,128 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.hypothesis/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Packaging/build
+build/
+dist/
+.eggs/
+*.egg-info/
+*.egg
+.wheels/
+pip-log.txt
+pip-delete-this-directory.txt
+MANIFEST
+
+# OS/editor
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Secrets/env
+.env
+.env.*.local
+.env.local
+.env.example
+.python-version
+
+# Agentic secrets
+agentic/secrets/*.py
+agentic/secrets/*.json
+agentic/secrets/*.yaml
+agentic/secrets/*.yml
+agentic/secrets/*.key
+agentic/secrets/*.pem
+agentic/secrets/*.p12
+agentic/secrets/*.pfx
+
+# JetBrains (default: ignore all)
+.idea/
+
+# Cursor
+.cursor/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Node.js (for future frontend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+
+# Frontend build files
+frontend/dist/
+frontend/build/
+frontend/.next/
+frontend/.nuxt/
+frontend/.output/
+
+# Docker
+.dockerignore
+Dockerfile.dev
+docker-compose.override.yml
+
+# If selectively sharing, replace the single .idea/ with:
+# .idea/*
+# !.idea/inspectionProfiles/
+# !.idea/codeStyles/
+# !.idea/vcs.xml
+# !.idea/modules.xml
+# !.idea/*.iml
+# !.idea/misc.xml
+# .idea/workspace.xml
+# .idea/tasks.xml
+# .idea/dictionaries
+# .idea/shelf/
+# .idea/httpRequests/
+# .idea/dataSources/
+# .idea/dataSources.local.xml
+# .idea/usage.statistics.xml
+# .idea/gradle.xml
+# .idea/libraries/
