@@ -262,6 +262,113 @@ class TestMasterGraphBuilder:
         # Check that fallback embeddings are used
         assert all(emb == [0.1, 0.2] for emb in result_state.embeddings)
 
+    @pytest.mark.integration
+    def test_long_paragraph_chunk_embed_store(self, real_graph_builder):
+        """Test processing a long paragraph through chunk, embed, and store workflow."""
+        if not os.getenv("OPENAI_API_KEY"):
+            pytest.skip("OPENAI_API_KEY not set in .env file")
+        
+        try:
+            # Create a long paragraph for testing
+            long_paragraph = """
+            The Smart Second Brain is an advanced AI-powered knowledge management system that revolutionizes how individuals and organizations process, store, and retrieve information. Built on cutting-edge technologies including LangGraph for workflow orchestration, Azure OpenAI for natural language processing, and ChromaDB for vector storage, this platform provides intelligent document processing capabilities that go far beyond simple text storage. The system employs sophisticated text chunking algorithms that break down large documents into semantically meaningful pieces, ensuring that context is preserved while optimizing for embedding generation and retrieval. Each chunk is then processed through state-of-the-art embedding models like text-embedding-3-small, which converts text into high-dimensional vector representations that capture semantic meaning and enable powerful similarity searches. The vector database, powered by ChromaDB, stores these embeddings alongside rich metadata including source information, categorization tags, and temporal data, allowing for complex queries that can find relevant information across vast document collections. The platform's retrieval system uses advanced semantic search algorithms to find the most relevant chunks based on user queries, and its answer generation component leverages large language models to synthesize coherent, contextually appropriate responses. What sets this system apart is its human-in-the-loop architecture, which combines AI automation with human oversight to ensure quality, handle edge cases, and provide continuous learning capabilities. The system also features robust error handling, comprehensive logging, and scalable architecture that can handle everything from individual note-taking to enterprise-level knowledge management. Users can interact with the system through multiple interfaces, including natural language queries, document uploads, and API integrations, making it suitable for researchers, content creators, businesses, and anyone who needs to manage large amounts of information effectively. The platform's modular design allows for easy customization and extension, with components that can be swapped out or enhanced based on specific use cases and requirements.
+            """
+            
+            # Create state with long paragraph
+            state = KnowledgeState(
+                query_type="ingest",
+                raw_document=long_paragraph,
+                source="test_long_paragraph",
+                categories=["ai", "knowledge_management", "technology"],
+                metadata={
+                    "author": "test_user",
+                    "timestamp": "2024-01-01T00:00:00Z",
+                    "document_type": "technical_description"
+                }
+            )
+            
+            logger.info(f"📄 Processing long paragraph ({len(long_paragraph)} characters)")
+            
+            # Step 1: Chunk the document
+            logger.info("🔪 Step 1: Chunking document...")
+            state = real_graph_builder.chunk_doc_node(state)
+            
+            assert state.chunks is not None
+            assert len(state.chunks) > 1  # Should be split into multiple chunks
+            logger.info(f"✅ Chunked into {len(state.chunks)} chunks")
+            
+            # Verify chunk sizes are reasonable
+            chunk_sizes = [len(chunk) for chunk in state.chunks]
+            logger.info(f"📊 Chunk sizes: min={min(chunk_sizes)}, max={max(chunk_sizes)}, avg={sum(chunk_sizes)/len(chunk_sizes):.1f}")
+            
+            # Step 2: Generate embeddings
+            logger.info("🔤 Step 2: Generating embeddings...")
+            state = real_graph_builder.embed_node(state)
+            
+            assert state.embeddings is not None
+            assert len(state.embeddings) == len(state.chunks)
+            logger.info(f"✅ Generated {len(state.embeddings)} embeddings")
+            
+            # Verify embedding dimensions
+            embedding_dims = [len(emb) for emb in state.embeddings]
+            assert all(dim == embedding_dims[0] for dim in embedding_dims)  # All should have same dimensions
+            logger.info(f"🔤 Embedding dimensions: {embedding_dims[0]}")
+            
+            # Step 3: Store in ChromaDB
+            logger.info("💾 Step 3: Storing in ChromaDB...")
+            state = real_graph_builder.store_node(state)
+            
+            assert state.status != "error"
+            logger.info(f"✅ Stored successfully in ChromaDB")
+            
+            # Verify vectorstore was created and populated
+            assert real_graph_builder.vectorstore is not None
+            
+            # Test retrieval from the stored data
+            logger.info("🔍 Step 4: Testing retrieval...")
+            retriever = real_graph_builder.vectorstore.as_retriever(search_kwargs={"k": 3})
+            real_graph_builder.retriever = retriever
+            
+            query_state = KnowledgeState(
+                query_type="query",
+                user_input="What is the Smart Second Brain system?",
+                messages=[{"role": "user", "content": "What is the Smart Second Brain system?"}]
+            )
+            
+            # Run retrieval
+            query_state = real_graph_builder.retriever_node(query_state)
+            
+            assert query_state.retrieved_docs is not None
+            assert len(query_state.retrieved_docs) > 0
+            logger.info(f"✅ Retrieved {len(query_state.retrieved_docs)} relevant documents")
+            
+            # Test answer generation
+            logger.info("🤖 Step 5: Testing answer generation...")
+            query_state = real_graph_builder.answer_gen_node(query_state)
+            
+            assert query_state.generated_answer is not None
+            assert len(query_state.generated_answer) > 50
+            logger.info(f"✅ Generated answer: {query_state.generated_answer[:100]}...")
+            
+            # Complete the workflow
+            query_state = real_graph_builder.human_review_node(query_state)
+            query_state = real_graph_builder.validated_store_node(query_state)
+            
+            assert query_state.status == "validated"
+            logger.info("✅ Complete workflow successful!")
+            
+            # Summary
+            logger.info(f"📊 Workflow Summary:")
+            logger.info(f"   - Input: {len(long_paragraph)} characters")
+            logger.info(f"   - Chunks: {len(state.chunks)}")
+            logger.info(f"   - Embeddings: {len(state.embeddings)}")
+            logger.info(f"   - Embedding dimensions: {embedding_dims[0]}")
+            logger.info(f"   - Retrieved docs: {len(query_state.retrieved_docs)}")
+            logger.info(f"   - Final status: {query_state.status}")
+            
+        except Exception as e:
+            pytest.fail(f"Long paragraph workflow test failed: {e}")
+
     def test_store_node(self, graph_builder, sample_ingest_state, mock_vectorstore):
         """Test store node with vectorstore."""
         # Prepare state with chunks and embeddings

@@ -1,5 +1,7 @@
 from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_chroma import Chroma
 from ..core.knowledge_state import KnowledgeState
 
 # Import centralized logging
@@ -44,10 +46,24 @@ class MasterGraphBuilder:
             return state
 
     def chunk_doc_node(self, state: KnowledgeState):
-        # Naive example: split by paragraphs
+        """
+        Splits raw text into overlapping chunks for embedding.
+        Uses RecursiveCharacterTextSplitter for better balance and robustness.
+        """
         if state.raw_document:
-            state.chunks = state.raw_document.split("\n\n")
+            splitter = RecursiveCharacterTextSplitter(
+                chunk_size=500,     # max characters per chunk
+                chunk_overlap=50    # overlap between chunks
+            )
+            state.chunks = splitter.split_text(state.raw_document)
+            state.logs = (state.logs or []) + [
+                f"Chunked document into {len(state.chunks)} chunks"
+            ]
+        else:
+            state.logs = (state.logs or []) + ["No raw_document found for chunking"]
+
         return state
+
 
     def embed_node(self, state: KnowledgeState):
         # Use embedding model if available, otherwise fallback to placeholder
@@ -68,12 +84,48 @@ class MasterGraphBuilder:
         return state
 
     def store_node(self, state: KnowledgeState):
-        # Example storing in vectorstore if available
-        if self.vectorstore and state.chunks and state.embeddings:
-            for chunk, emb in zip(state.chunks, state.embeddings):
-                self.vectorstore.add_texts([chunk], embeddings=[emb])
-        state.status = "stored"
+        """
+        Stores embeddings + chunks into ChromaDB with metadata including multiple categories.
+        """
+        if state.embeddings and state.chunks:
+            try:
+                if not self.vectorstore:
+                    self.vectorstore = Chroma(
+                        collection_name="knowledge_base",
+                        embedding_function=self.embedding_model,
+                        persist_directory="./chroma_db"
+                    )
+
+                # Store categories as a string (ChromaDB doesn't accept lists in metadata)
+                metadatas = [
+                    {
+                        "source": state.source or "unknown",
+                        "categories": ", ".join(state.categories) if state.categories else "general",
+                        "chunk_id": i
+                    }
+                    for i in range(len(state.chunks))
+                ]
+
+                self.vectorstore.add_texts(
+                    texts=state.chunks,
+                    metadatas=metadatas
+                )
+
+                # Note: Newer ChromaDB versions don't require explicit persist()
+                # Data is automatically persisted when using persist_directory
+
+                state.status = "stored"
+                state.logs = (state.logs or []) + [
+                    f"Stored {len(state.chunks)} chunks in ChromaDB with categories {state.categories or ['general']}"
+                ]
+            except Exception as e:
+                state.status = "error"
+                state.logs = (state.logs or []) + [f"Storing failed: {e}"]
+        else:
+            state.logs = (state.logs or []) + ["No embeddings/chunks to store"]
+
         return state
+
 
     def retriever_node(self, state: KnowledgeState):
         if self.retriever and state.user_input:
