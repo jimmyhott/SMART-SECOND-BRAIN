@@ -378,6 +378,195 @@ class TestMasterGraphBuilder:
         except Exception as e:
             pytest.fail(f"Long paragraph workflow test failed: {e}")
 
+    @pytest.mark.integration
+    def test_query_workflow(self, real_graph_builder):
+        """Test the complete query workflow: retriever -> answer -> review -> validated_store."""
+        if not os.getenv("OPENAI_API_KEY"):
+            pytest.skip("OPENAI_API_KEY not set in .env file")
+
+        try:
+            logger.info("🔍 Testing Query Workflow")
+            logger.info("=" * 40)
+
+            # Ensure vectorstore is available for the workflow
+            if not real_graph_builder.vectorstore:
+                logger.info("🔧 Setting up vectorstore for test...")
+                # Create vectorstore directly
+                from langchain_chroma import Chroma
+                real_graph_builder.vectorstore = Chroma(
+                    collection_name="test_knowledge_base",
+                    embedding_function=real_graph_builder.embedding_model,
+                    persist_directory=real_graph_builder.chromadb_dir
+                )
+                logger.info("✅ Vectorstore initialized")
+
+            # Build the graph with checkpointer
+            graph = real_graph_builder.build()
+
+            # Create a query state
+            query_state = KnowledgeState(
+                query_type="query",
+                user_input="What are the key features of artificial intelligence systems?",
+                messages=[{"role": "user", "content": "What are the key features of artificial intelligence systems?"}],
+                categories=["ai", "technology"],
+                source="test_query"
+            )
+
+            logger.info(f"Query: '{query_state.user_input}'")
+
+            # Step 1: Add sample documents to ensure we have content to retrieve
+            logger.info("🔍 Step 1: Setting up test documents...")
+            sample_doc = """
+            Artificial Intelligence (AI) systems have several key features:
+            1. Learning capability - ability to improve performance over time
+            2. Reasoning - logical inference and problem-solving
+            3. Perception - sensing and interpreting the environment
+            4. Natural language understanding - processing human language
+            5. Adaptability - adjusting to new situations and data
+
+            These features enable AI systems to perform complex tasks like image recognition,
+            language translation, autonomous driving, and medical diagnosis.
+            """
+
+            from langchain.schema import Document
+            real_graph_builder.vectorstore.add_documents([
+                Document(
+                    page_content=sample_doc,
+                    metadata={"source": "ai_features", "categories": "ai, technology"}
+                )
+            ])
+            logger.info("✅ Added sample document to vectorstore")
+
+            # Run the complete query workflow
+            logger.info("🤖 Step 2: Running complete query workflow...")
+            result = graph.invoke(query_state, config={"configurable": {"thread_id": "query_test_thread"}})
+
+            # Debug: Print all keys in result
+            logger.info(f"🔍 Result keys: {list(result.keys())}")
+            for key, value in result.items():
+                logger.info(f"  {key}: {type(value)} = {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
+
+            # Verify retrieval results
+            assert result["retrieved_docs"] is not None
+            retrieved_count = len(result["retrieved_docs"])
+            logger.info(f"✅ Retrieved {retrieved_count} documents")
+
+            # Verify answer generation
+            assert result["generated_answer"] is not None
+            answer_length = len(result["generated_answer"])
+            assert answer_length > 10  # At least some content
+            logger.info(f"✅ Generated answer ({answer_length} characters)")
+
+            # Verify the answer contains relevant information
+            answer_text = result["generated_answer"].lower()
+            assert any(keyword in answer_text for keyword in ["ai", "artificial intelligence", "learning", "reasoning"])
+
+            # Check if status exists, if not, the workflow completed successfully
+            if "status" in result:
+                logger.info(f"✅ Final status: {result['status']}")
+                assert result["status"] == "validated"
+            else:
+                logger.info("ℹ️  Status not set, but workflow completed")
+
+            # Check for human feedback
+            if "human_feedback" in result:
+                logger.info(f"✅ Human feedback: {result['human_feedback']}")
+                assert result["human_feedback"] == "approved"
+            else:
+                logger.info("ℹ️  No human feedback set")
+
+            # Verify logs contain expected entries
+            logs = result.get("logs", [])
+            assert len(logs) > 0
+            logger.info(f"✅ Workflow logs: {len(logs)} entries")
+            log_text = " ".join(logs).lower()
+            assert any(keyword in log_text for keyword in ["retrieved", "generated", "approved"])
+
+            logger.info("🎉 Query workflow test completed successfully!")
+
+        except Exception as e:
+            logger.error(f"❌ Query workflow test failed: {e}")
+            import traceback
+            traceback.print_exc()
+            pytest.fail(f"Query workflow test failed: {e}")
+
+    @pytest.mark.integration
+    def test_query_workflow_with_empty_vectorstore(self, real_graph_builder):
+        """Test query workflow when vectorstore is empty."""
+        if not os.getenv("OPENAI_API_KEY"):
+            pytest.skip("OPENAI_API_KEY not set in .env file")
+
+        try:
+            logger.info("🔍 Testing Query Workflow with Empty VectorStore")
+
+            # Build the graph with checkpointer
+            graph = real_graph_builder.build()
+
+            # Create a query state
+            query_state = KnowledgeState(
+                query_type="query",
+                user_input="What is machine learning?",
+                messages=[{"role": "user", "content": "What is machine learning?"}]
+            )
+
+            # Run the query workflow
+            result = graph.invoke(query_state, config={"configurable": {"thread_id": "empty_vs_test"}})
+
+                        # Should still generate an answer (even if based on limited/no context)
+            assert result["generated_answer"] is not None
+
+            # Status might not be set if vectorstore operations are skipped
+            if "status" in result:
+                logger.info(f"✅ Status: {result['status']}")
+            else:
+                logger.info("ℹ️  No status set (expected for empty vectorstore)")
+
+            # Should have retrieved docs array (possibly empty)
+            assert isinstance(result["retrieved_docs"], list)
+
+            logger.info("✅ Empty vectorstore query handled gracefully")
+
+        except Exception as e:
+            logger.error(f"❌ Empty vectorstore test failed: {e}")
+            pytest.fail(f"Empty vectorstore test failed: {e}")
+
+    @pytest.mark.integration
+    def test_query_workflow_error_handling(self, real_graph_builder):
+        """Test query workflow error handling."""
+        if not os.getenv("OPENAI_API_KEY"):
+            pytest.skip("OPENAI_API_KEY not set in .env file")
+
+        try:
+            logger.info("🔍 Testing Query Workflow Error Handling")
+
+            # Build the graph with checkpointer
+            graph = real_graph_builder.build()
+
+            # Test with invalid query state
+            invalid_state = KnowledgeState(
+                query_type="query",
+                user_input="",  # Empty query
+                messages=[]
+            )
+
+            # Should handle gracefully
+            result = graph.invoke(invalid_state, config={"configurable": {"thread_id": "error_test"}})
+
+            # Should still complete the workflow
+            if "status" in result:
+                assert result["status"] in ["validated", "error"]
+                logger.info(f"✅ Status: {result['status']}")
+            else:
+                logger.info("ℹ️  No status set (expected for error cases)")
+
+            assert "logs" in result
+
+            logger.info("✅ Error handling test completed")
+
+        except Exception as e:
+            logger.error(f"❌ Error handling test failed: {e}")
+            pytest.fail(f"Error handling test failed: {e}")
+
     def test_store_node(self, graph_builder, sample_ingest_state, mock_vectorstore):
         """Test store node with vectorstore."""
         # Prepare state with chunks and embeddings

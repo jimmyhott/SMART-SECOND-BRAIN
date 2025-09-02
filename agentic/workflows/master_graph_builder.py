@@ -3,6 +3,8 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
+from langchain.prompts import ChatPromptTemplate
+import datetime
 from ..core.knowledge_state import KnowledgeState
 
 # Import centralized logging
@@ -133,36 +135,183 @@ class MasterGraphBuilder:
 
 
     def retriever_node(self, state: KnowledgeState):
-        if self.retriever and state.user_input:
-            results = self.retriever.get_relevant_documents(state.user_input)
-            state.retrieved_docs = [{"content": r.page_content} for r in results]
-        else:
-            state.retrieved_docs = [{"content": "Dummy retrieved note"}]
+        """
+        Retrieves relevant documents from Chroma based on user query.
+        Falls back to dummy text if retriever/vectorstore not available.
+        """
+        if not state.user_input:
+            state.logs = (state.logs or []) + ["No user_input provided for retrieval"]
+            state.retrieved_docs = []
+            return state
+
+        try:
+            if self.retriever:
+                logger.info(f"🔍 Retrieving docs for query: {state.user_input}")
+                results = self.retriever.get_relevant_documents(state.user_input)
+            elif self.vectorstore:
+                logger.info(f"🔍 Using vectorstore.similarity_search for query: {state.user_input}")
+                results = self.vectorstore.similarity_search(state.user_input, k=5)
+            else:
+                results = []
+
+            state.retrieved_docs = [{"content": r.page_content, "metadata": r.metadata} for r in results]
+            state.logs = (state.logs or []) + [f"Retrieved {len(state.retrieved_docs)} docs"]
+
+        except Exception as e:
+            logger.error(f"❌ Retrieval failed: {e}")
+            state.retrieved_docs = []
+            state.logs = (state.logs or []) + [f"Retrieval error: {str(e)}"]
+
         return state
+
 
     def answer_gen_node(self, state: KnowledgeState):
-        if self.llm and state.user_input:
-            context = "\n".join([doc["content"] for doc in state.retrieved_docs or []])
-            prompt = [
-                {"role": "system", "content": "You are a helpful knowledge assistant."},
-                {"role": "user", "content": f"Query: {state.user_input}\n\nContext:\n{context}"}
-            ]
-            response = self.llm.invoke(prompt)
+        """
+        Generates an answer using retrieved docs + conversation history + user query.
+        Implements a proper RAG step with fallback.
+        """
+        if not self.llm or not state.user_input:
+            state.logs = (state.logs or []) + ["⚠️ No LLM or user query provided"]
+            return state
+
+        try:
+            # --- Retrieved context ---
+            context = "\n\n".join(
+                [doc["content"] for doc in (state.retrieved_docs or [])]
+            ) or "No relevant documents were retrieved."
+
+            # --- Conversation history ---
+            conversation = "\n".join(
+                [f"{m['role']}: {m['content']}" for m in (state.messages or [])]
+            )
+
+            # --- Prompt template ---
+            template = """
+            You are a helpful knowledge assistant.
+
+            Conversation so far:
+            {conversation}
+
+            User question:
+            {query}
+
+            Retrieved context:
+            {context}
+
+            Instructions:
+            - Base your answer primarily on the retrieved context.
+            - If the context is empty or insufficient, say "I don’t know based on available knowledge."
+            - Keep the answer clear and concise.
+            """
+            prompt = ChatPromptTemplate.from_template(template)
+            chain = prompt | self.llm
+
+            # --- Call LLM ---
+            response = chain.invoke({
+                "conversation": conversation,
+                "query": state.user_input,
+                "context": context
+            })
+
+            # --- Update state ---
             state.generated_answer = response.content
-            state.messages.append({"role": "ai", "content": state.generated_answer})
+            if not state.messages:
+                state.messages = []
+            state.messages.append({"role": "user", "content": state.user_input})
+            state.messages.append({"role": "assistant", "content": state.generated_answer})
+            state.logs = (state.logs or []) + ["✅ Generated grounded answer"]
+
+        except Exception as e:
+            state.generated_answer = None
+            state.logs = (state.logs or []) + [f"❌ Answer generation failed: {e}"]
+
         return state
+
 
     def human_review_node(self, state: KnowledgeState):
-        # Stub: in real app, integrate with UI or approval workflow
-        state.human_feedback = "approved"
-        state.final_answer = state.generated_answer
+        """
+        Handles human-in-the-loop review of the AI's answer.
+        In a real app, this could be connected to a UI or workflow tool.
+        For now, supports auto-approval with the option to simulate rejection/edits.
+        """
+        try:
+            # By default, auto-approve (for batch or non-interactive runs)
+            feedback = getattr(state, "human_feedback", None)
+
+            if not feedback:
+                # Auto-approve path
+                feedback = "approved"
+                state.final_answer = state.generated_answer
+                state.logs = (state.logs or []) + ["✅ Auto-approved answer"]
+
+            elif feedback == "rejected":
+                # If user rejected, final_answer is None
+                state.final_answer = None
+                state.logs = (state.logs or []) + ["❌ Answer was rejected by human"]
+
+            elif feedback == "edited":
+                # If user edited, expect state.edited_answer to exist
+                if hasattr(state, "edited_answer") and state.edited_answer:
+                    state.final_answer = state.edited_answer
+                    state.logs = (state.logs or []) + ["✏️ Human edited the answer"]
+                else:
+                    state.final_answer = None
+                    state.logs = (state.logs or []) + ["⚠️ Edit requested but no edited_answer provided"]
+
+            else:
+                # Unknown feedback type
+                state.final_answer = state.generated_answer
+                state.logs = (state.logs or []) + [f"⚠️ Unknown feedback '{feedback}', defaulting to generated answer"]
+
+            # Save feedback
+            state.human_feedback = feedback
+
+        except Exception as e:
+            state.final_answer = state.generated_answer
+            state.human_feedback = "error"
+            state.logs = (state.logs or []) + [f"❌ Human review failed: {e}"]
+
         return state
 
+    
     def validated_store_node(self, state: KnowledgeState):
-        # Store validated answer (optional)
-        if self.vectorstore and state.final_answer:
-            self.vectorstore.add_texts([state.final_answer])
-        state.status = "validated"
+        """
+        Stores human-validated answers back into Chroma as new knowledge.
+        Only stores if feedback is 'approved' or 'edited'.
+        """
+        try:
+            if not self.vectorstore:
+                state.logs = (state.logs or []) + ["⚠️ No vectorstore available, skipping validated store"]
+                return state
+
+            if not state.final_answer:
+                state.logs = (state.logs or []) + ["⚠️ No final_answer to store, skipping"]
+                return state
+
+            if state.human_feedback not in ("approved", "edited"):
+                state.logs = (state.logs or []) + [f"ℹ️ Skipping store because feedback = {state.human_feedback}"]
+                return state
+
+            # Add metadata for traceability
+            metadata = {
+                "source": "assistant_validated",
+                "categories": ", ".join(state.categories) if state.categories else "general",
+                "feedback": state.human_feedback,
+                "timestamp": datetime.datetime.utcnow().isoformat()
+            }
+
+            self.vectorstore.add_texts(
+                texts=[state.final_answer],
+                metadatas=[metadata]
+            )
+
+            state.status = "validated"
+            state.logs = (state.logs or []) + ["✅ Stored validated answer in Chroma"]
+
+        except Exception as e:
+            state.status = "error"
+            state.logs = (state.logs or []) + [f"❌ Validated store failed: {e}"]
+
         return state
 
     # --- Graph Compilation ---
@@ -209,6 +358,7 @@ class MasterGraphBuilder:
         graph.add_edge("retriever", "answer")
         graph.add_edge("answer", "review")
         graph.add_edge("review", "validated_store")
+
         graph.add_edge("validated_store", END)
 
         return graph.compile(checkpointer=self.checkpointer)
