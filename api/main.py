@@ -1,23 +1,19 @@
 """Main FastAPI application entry point."""
 
-import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from api.core.config import settings
-from api.routes.v1 import auth, crypto, portfolio, users
-
 # Create FastAPI application
 app = FastAPI(
-    title="CryptoAnalyst API",
-    description="A comprehensive cryptocurrency analysis platform API",
+    title="Smart Second Brain API",
+    description="An intelligent knowledge management system powered by LangGraph and AI",
     version="0.1.0",
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None,
 )
 
-# Add middleware
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_hosts,
@@ -26,22 +22,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=settings.allowed_hosts,
-)
+# Simple test endpoint
+@app.get("/test")
+async def test_endpoint():
+    return {"message": "API is working"}
 
 # Include API routers
-app.include_router(auth.router, prefix="/api/v1", tags=["authentication"])
-app.include_router(users.router, prefix="/api/v1", tags=["users"])
-app.include_router(crypto.router, prefix="/api/v1", tags=["cryptocurrency"])
-app.include_router(portfolio.router, prefix="/api/v1", tags=["portfolio"])
+try:
+    from api.routes.v1.graph_api import router as graph_router
+    app.include_router(graph_router, prefix="/smart-second-brain", tags=["graph"])
+except ImportError as e:
+    print(f"Warning: Could not import graph router: {e}")
 
 
 @app.get("/")
 async def root() -> dict[str, str]:
     """Root endpoint."""
-    return {"message": "Welcome to CryptoAnalyst API"}
+    return {"message": "Welcome to Smart Second Brain API"}
 
 
 @app.get("/health")
@@ -50,16 +47,16 @@ async def health_check() -> dict[str, str]:
     return {"status": "healthy"}
 
 
-def main() -> None:
-    """Main function to run the application."""
-    uvicorn.run(
-        "api.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=settings.debug,
-        log_level=settings.log_level.lower(),
-    )
-
-
+# For running with uvicorn directly
 if __name__ == "__main__":
-    main()
+    try:
+        import uvicorn
+        uvicorn.run(
+            "api.main:app",
+            host=settings.host,
+            port=settings.port,
+            reload=settings.debug,
+            log_level=settings.log_level.lower(),
+        )
+    except ImportError:
+        print("uvicorn not available, run with: uvicorn api.main:app --reload")
