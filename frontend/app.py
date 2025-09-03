@@ -299,7 +299,15 @@ def main_page():
     
     # Header
     with ui.header().classes('bg-blue-600 text-white'):
-        ui.label('🧠 Smart Second Brain').classes('text-h4 q-mr-md')
+        ui.html('''
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.88 2.5 2.5 0 0 1-.44-4.96A2.5 2.5 0 0 1 4.5 9.5a2.5 2.5 0 0 1 1.06-2.06A2.5 2.5 0 0 1 9.5 2Z"/>
+                    <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.88 2.5 2.5 0 0 0 .44-4.96A2.5 2.5 0 0 0 19.5 9.5a2.5 2.5 0 0 0-1.06-2.06A2.5 2.5 0 0 0 14.5 2Z"/>
+                </svg>
+                <span style="font-size: 1.5rem; font-weight: 600;">Smart Second Brain</span>
+            </div>
+        ''').classes('q-mr-md')
         ui.label('AI-Powered Knowledge Management').classes('text-subtitle2')
         
         with ui.row().classes('q-ml-auto'):
@@ -313,53 +321,53 @@ def main_page():
         with ui.card().classes('full-width q-mb-md'):
             ui.label('🏥 System Health').classes('text-h6 q-mb-md')
             
-            with ui.row().classes('full-width'):
+            with ui.row().classes('full-width q-col-gutter-sm'):
                 with ui.column().classes('col-3'):
                     ui.html(f"""
-                        <div style="text-align: center; padding: 1rem;">
-                            <div style="width: 60px; height: 60px; border-radius: 50%; background: {get_status_color(system_status['health'])}; margin: 0 auto 0.5rem auto; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                        <div style="text-align: center; padding: 0.5rem;">
+                            <div style="width: 40px; height: 40px; border-radius: 50%; background: {get_status_color(system_status['health'])}; margin: 0 auto 0.25rem auto; display: flex; align-items: center; justify-content: center; color: white; font-size: 1rem;">
                                 {'✅' if system_status['health'] == 'healthy' else '❌' if system_status['health'] == 'error' else '⚠️'}
                             </div>
-                            <p style="margin: 0; font-weight: 500;">Overall</p>
-                            <p style="margin: 0; font-size: 0.875rem; color: #6c757d;">{system_status['health'].title()}</p>
+                            <p style="margin: 0; font-weight: 500; font-size: 0.875rem;">Overall</p>
+                            <p style="margin: 0; font-size: 0.75rem; color: #6c757d;">{system_status['health'].title()}</p>
                         </div>
                     """)
                 
                 with ui.column().classes('col-3'):
                     ui.html(f"""
-                        <div style="text-align: center; padding: 1rem;">
-                            <div style="width: 60px; height: 60px; border-radius: 50%; background: {'#28a745' if system_status['graph_initialized'] else '#dc3545'}; margin: 0 auto 0.5rem auto; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                        <div style="text-align: center; padding: 0.5rem;">
+                            <div style="width: 40px; height: 40px; border-radius: 50%; background: {'#28a745' if system_status['graph_initialized'] else '#dc3545'}; margin: 0 auto 0.25rem auto; display: flex; align-items: center; justify-content: center; color: white; font-size: 1rem;">
                                 {'✅' if system_status['graph_initialized'] else '❌'}
                             </div>
-                            <p style="margin: 0; font-weight: 500;">Graph</p>
-                            <p style="margin: 0; font-size: 0.875rem; color: #6c757d;">{'Ready' if system_status['graph_initialized'] else 'Not Ready'}</p>
+                            <p style="margin: 0; font-weight: 500; font-size: 0.875rem;">Graph</p>
+                            <p style="margin: 0; font-size: 0.75rem; color: #6c757d;">{'Ready' if system_status['graph_initialized'] else 'Not Ready'}</p>
                         </div>
                     """)
                 
                 with ui.column().classes('col-3'):
                     ui.html(f"""
-                        <div style="text-align: center; padding: 1rem;">
-                            <div style="width: 60px; height: 60px; border-radius: 50%; background: {'#28a745' if system_status['vectorstore_ready'] else '#dc3545'}; margin: 0 auto 0.5rem auto; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                        <div style="text-align: center; padding: 0.5rem;">
+                            <div style="width: 40px; height: 40px; border-radius: 50%; background: {'#28a745' if system_status['vectorstore_ready'] else '#dc3545'}; margin: 0 auto 0.25rem auto; display: flex; align-items: center; justify-content: center; color: white; font-size: 1rem;">
                                 {'✅' if system_status['vectorstore_ready'] else '❌'}
                             </div>
-                            <p style="margin: 0; font-weight: 500;">Vector Store</p>
-                            <p style="margin: 0; font-size: 0.875rem; color: #6c757d;">{'Ready' if system_status['vectorstore_ready'] else 'Not Ready'}</p>
+                            <p style="margin: 0; font-weight: 500; font-size: 0.75rem;">Vector Store</p>
+                            <p style="margin: 0; font-size: 0.75rem; color: #6c757d;">{'Ready' if system_status['vectorstore_ready'] else 'Not Ready'}</p>
                         </div>
                     """)
                 
                 with ui.column().classes('col-3'):
                     ui.html(f"""
-                        <div style="text-align: center; padding: 1rem;">
-                            <div style="width: 60px; height: 60px; border-radius: 50%; background: {'#28a745' if system_status['llm_ready'] else '#dc3545'}; margin: 0 auto 0.5rem auto; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                        <div style="text-align: center; padding: 0.5rem;">
+                            <div style="width: 40px; height: 40px; border-radius: 50%; background: {'#28a745' if system_status['llm_ready'] else '#dc3545'}; margin: 0 auto 0.25rem auto; display: flex; align-items: center; justify-content: center; color: white; font-size: 1rem;">
                                 {'✅' if system_status['llm_ready'] else '❌'}
                             </div>
-                            <p style="margin: 0; font-weight: 500;">AI Model</p>
-                            <p style="margin: 0; font-size: 0.875rem; color: #6c757d;">{'Ready' if system_status['llm_ready'] else 'Not Ready'}</p>
+                            <p style="margin: 0; font-weight: 500; font-size: 0.875rem;">AI Model</p>
+                            <p style="margin: 0; font-size: 0.75rem; color: #6c757d;">{'Ready' if system_status['llm_ready'] else 'Not Ready'}</p>
                         </div>
                     """)
             
             if system_status['last_check']:
-                ui.html(f'<p style="text-align: center; margin: 1rem 0 0 0; font-size: 0.875rem; color: #6c757d;">Last checked: {system_status["last_check"]}</p>')
+                ui.html(f'<p style="text-align: center; margin: 0.5rem 0 0 0; font-size: 0.75rem; color: #6c757d;">Last checked: {system_status["last_check"]}</p>')
         
         # Main Features Grid
         with ui.row().classes('full-width q-col-gutter-md'):
