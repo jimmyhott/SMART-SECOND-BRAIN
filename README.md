@@ -141,56 +141,81 @@ python app.py      # Start the frontend
 
 ```
 SMART-SECOND-BRAIN/
-├── api/                           # FastAPI backend
-│   ├── __init__.py
-│   ├── main.py                    # FastAPI application entry point
-│   ├── core/                      # Core configuration
-│   │   ├── __init__.py
-│   │   └── config.py              # Settings and configuration
-│   └── routes/                    # API routes and endpoints
-│       ├── __init__.py
-│       └── v1/                    # API version 1
-│           ├── __init__.py
-│           └── graph_api.py       # LangGraph integration endpoints
-├── agentic/                       # AI Agent System
-│   ├── core/                      # Core agent components
-│   │   └── knowledge_state.py     # LangGraph state management
-│   ├── workflows/                 # LangGraph workflows
-│   │   ├── master_graph_builder.py # Main knowledge processing workflow
-│   │   └── document_retriever.py   # Document retrieval system
-│   ├── data/                      # Agent data storage
-│   ├── prompts/                   # Agent prompts
-│   ├── schemas/                   # Agent schemas
-│   ├── secrets/                   # Secure credentials
-│   ├── tools/                     # Agent tools
-│   └── workflows/                 # Agent workflows
-├── shared/                        # Shared utilities
-│   ├── config/                    # Shared configuration
-│   ├── models/                    # Shared models
-│   └── utils/                     # Shared utilities
-│       ├── logging_config.py      # Centralized logging configuration
-│       └── pathlib_example.py     # Path utilities example
-├── tests/                         # Test suite
-│   ├── __init__.py
-│   ├── conftest.py                # Test configuration
-│   ├── test_api/                  # API tests
-│   ├── test_services/             # Service tests
-│   │   └── test_master_graph_builder.py # AI workflow tests
-│   └── test_utils/                # Utility tests
-├── alembic/                       # Database migrations
-│   ├── versions/
-│   ├── env.py
-│   └── alembic.ini
-├── demo_document_retriever.py     # Document retriever demo
+├── api/                           # FastAPI backend application
+│   ├── __init__.py                # API package initialization
+│   ├── main.py                    # FastAPI application entry point and server configuration
+│   ├── core/                      # Core API configuration and utilities
+│   │   ├── __init__.py            # Core package initialization
+│   │   ├── config.py              # Application settings, environment variables, and configuration
+│   │   ├── database.py            # Database connection and session management (future)
+│   │   ├── security.py            # Authentication and authorization (future)
+│   │   └── __pycache__/           # Python bytecode cache
+│   └── routes/                    # API endpoint definitions and routing
+│       ├── __init__.py            # Routes package initialization
+│       └── v1/                    # API version 1 endpoints
+│           ├── __init__.py        # V1 package initialization
+│           ├── graph_api.py       # LangGraph integration endpoints (/ingest, /query, /health)
+│           ├── auth.py            # Authentication endpoints (future)
+│           ├── crypto.py          # Cryptocurrency endpoints (future)
+│           ├── portfolio.py       # Portfolio management endpoints (future)
+│           └── users.py           # User management endpoints (future)
+├── agentic/                       # AI Agent System and LangGraph workflows
+│   ├── agents/                    # Individual AI agent implementations (future)
+│   ├── core/                      # Core agent system components
+│   │   ├── knowledge_state.py     # LangGraph state management and data structures
+│   │   └── __pycache__/           # Python bytecode cache
+│   ├── data/                      # Agent data storage and persistence (future)
+│   ├── prompts/                   # AI prompt templates and configurations (future)
+│   ├── schemas/                   # Data schemas and validation models (future)
+│   ├── secrets/                   # Secure credential management (future)
+│   ├── tools/                     # Agent tool implementations (future)
+│   └── workflows/                 # LangGraph workflow definitions
+│       ├── master_graph_builder.py # Main knowledge processing workflow with chunking, embedding, and storage
+│       └── document_retriever.py   # Advanced document retrieval with semantic search and re-ranking
+├── shared/                        # Shared utilities and common components
+│   ├── config/                    # Shared configuration management (future)
+│   ├── models/                    # Shared data models and schemas (future)
+│   └── utils/                     # Shared utility functions
+│       ├── logging_config.py      # Centralized logging configuration and setup
+│       └── pathlib_example.py     # Path manipulation utilities example
 ├── frontend/                      # NiceGUI Frontend application
-├── start_system.py                # Main system startup script
-├── stop_system.py                 # System shutdown script
-├── start.sh                       # Shell wrapper for startup
-├── stop.sh                        # Shell wrapper for shutdown
-├── pyproject.toml                 # Project configuration
+│   ├── app.py                     # Main frontend application with health dashboard and forms
+│   ├── pyproject.toml             # Frontend dependencies and configuration
+│   └── README.md                  # Frontend-specific documentation
+├── tests/                         # Comprehensive test suite
+│   ├── __init__.py                # Test package initialization
+│   ├── conftest.py                # Test configuration, fixtures, and setup
+│   ├── test_api/                  # API endpoint tests
+│   ├── test_services/             # Service and workflow tests
+│   │   ├── test_master_graph_builder.py # AI workflow integration tests
+│   │   └── test_document_retriever.py   # Document retrieval tests
+│   └── test_utils/                # Utility function tests
+├── infrastructure/                 # Infrastructure and deployment (future)
+├── alembic/                       # Database migration system (future)
+│   ├── versions/                  # Migration version files
+│   ├── env.py                     # Alembic environment configuration
+│   └── alembic.ini               # Alembic configuration file
+├── logs/                          # Application log files
+├── chroma_db/                     # Vector database storage for embeddings
+├── .cursor/                       # Cursor IDE configuration
+├── .idea/                         # PyCharm IDE configuration
+├── .pytest_cache/                 # Pytest cache and temporary files
+├── htmlcov/                       # Test coverage HTML reports
+├── start_system.py                # Main system startup script with monitoring and auto-recovery
+├── stop_system.py                 # System shutdown script with graceful process termination
+├── start.sh                       # Shell wrapper for easy system startup
+├── stop.sh                        # Shell wrapper for easy system shutdown
+├── demo_document_retriever.py     # Standalone document retriever demonstration script
+├── test_openai_connection.py      # OpenAI API connection testing script
+├── pyproject.toml                 # Project metadata, dependencies, and build configuration
 ├── .env.example                   # Environment variables template
-├── .gitignore                     # Git ignore rules
-└── README.md                      # This file
+├── .gitignore                     # Git ignore rules and patterns
+├── system_startup.log             # System startup and operation logs
+├── test_runner.log                # Test execution logs
+├── test_master_graph_builder.log  # Specific test logs
+├── coverage.xml                   # Test coverage XML report
+├── .coverage                      # Test coverage data
+└── README.md                      # This comprehensive project documentation
 ```
 
 ## 🔧 Development
