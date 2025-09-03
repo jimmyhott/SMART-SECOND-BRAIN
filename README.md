@@ -168,7 +168,6 @@ SMART-SECOND-BRAIN/
 │   ├── prompts/                   # AI prompt templates and configurations (future)
 │   ├── schemas/                   # Data schemas and validation models (future)
 │   ├── secrets/                   # Secure credential management (future)
-│   ├── tools/                     # Agent tool implementations (future)
 │   └── workflows/                 # LangGraph workflow definitions
 │       ├── master_graph_builder.py # Main knowledge processing workflow with chunking, embedding, and storage
 │       └── document_retriever.py   # Advanced document retrieval with semantic search, hybrid retrieval, and re-ranking
