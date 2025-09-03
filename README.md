@@ -297,45 +297,4 @@ ALLOWED_HOSTS=["*"]
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 🧪 Testing
-
-### Test Categories
-
-- **Unit Tests**: Fast, isolated tests with mocked components
-- **Integration Tests**: End-to-end tests with real Azure OpenAI APIs
-- **API Tests**: FastAPI endpoint testing
-- **Service Tests**: LangGraph workflow testing
-
-### Test Configuration
-
-Tests use pytest markers:
-- `@pytest.mark.unit` - Unit tests (mocked components)
-- `@pytest.mark.integration` - Integration tests (real Azure OpenAI APIs)
-
-### Available Tests
-
-- **`test_master_graph_builder.py`**: LangGraph workflow tests
-- **`test_document_retriever.py`**: Document retrieval system tests
-- **`run_graph_tests.py`**: Manual testing script for graph workflows
-
-### Logging
-
-All tests use centralized logging configuration:
-- Console output for immediate feedback
-- File output in `logs/` directory for debugging
-- Configurable log levels for different environments
-
-## 📞 Support
-
-For support and questions:
-- Create an issue on GitHub
-- Email: support@smartsecondbrain.com
-- Discord: [Join our community](https://discord.gg/smartsecondbrain)
