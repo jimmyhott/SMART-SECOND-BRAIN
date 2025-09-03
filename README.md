@@ -25,6 +25,37 @@ An intelligent knowledge management platform with AI-powered document processing
 - PostgreSQL 13+ (for future database features)
 - Redis 6+ (for future caching features)
 
+## 🚀 Quick Start with Startup Scripts
+
+The easiest way to get started is using our automated startup scripts that handle all components:
+
+### Using Startup Scripts (Recommended)
+
+```bash
+# Start the entire system (Backend API + Frontend)
+./start.sh
+
+# Stop all components
+./stop.sh
+```
+
+**What the startup scripts do:**
+- ✅ **Environment Validation** - Check Python version, required packages, directory structure
+- 🚀 **Component Startup** - Start Backend API (port 8000) and Frontend (port 5173) in correct order
+- 🔍 **Health Monitoring** - Wait for each service to become available before proceeding
+- 📊 **Status Display** - Show real-time status of all components
+- 🔄 **Auto-Recovery** - Automatically restart components if they crash
+- 🛑 **Graceful Shutdown** - Handle Ctrl+C and other signals properly
+
+**Prerequisites for startup scripts:**
+```bash
+pip install uvicorn fastapi nicegui requests psutil
+```
+
+### Manual Setup
+
+If you prefer to start components manually or need to troubleshoot:
+
 ## 🛠️ Installation
 
 ### Backend Setup
@@ -89,13 +120,22 @@ curl -X POST "http://localhost:8000/smart-second-brain/api/v1/graph/query" \
   -d '{"query": "What is machine learning?"}'
 ```
 
-### Frontend Setup (Coming Soon)
+### Frontend Setup (NiceGUI)
+
+The frontend is built with NiceGUI, a Python-based web framework:
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pip install -e .  # Install in development mode
+python app.py      # Start the frontend
 ```
+
+**Frontend Features:**
+- 🏥 **System Health Dashboard** - Real-time status of all components
+- 📄 **Document Ingestion** - Easy document upload and processing
+- 🔍 **Knowledge Query** - Natural language search interface
+- 📊 **Status Monitoring** - Live updates and component health
+- 🎨 **Modern UI** - Clean, responsive interface built with NiceGUI
 
 ## 🏗️ Project Structure
 
@@ -142,7 +182,11 @@ SMART-SECOND-BRAIN/
 │   ├── env.py
 │   └── alembic.ini
 ├── demo_document_retriever.py     # Document retriever demo
-├── frontend/                      # Frontend application (coming soon)
+├── frontend/                      # NiceGUI Frontend application
+├── start_system.py                # Main system startup script
+├── stop_system.py                 # System shutdown script
+├── start.sh                       # Shell wrapper for startup
+├── stop.sh                        # Shell wrapper for shutdown
 ├── pyproject.toml                 # Project configuration
 ├── .env.example                   # Environment variables template
 ├── .gitignore                     # Git ignore rules
@@ -260,6 +304,77 @@ GET /smart-second-brain/api/v1/graph/health
   "execution_time": 2.34,
   "timestamp": "2024-01-01T12:00:00Z"
 }
+```
+
+## 🚀 System Management
+
+### Startup Scripts
+
+Our automated startup scripts provide the easiest way to manage your Smart Second Brain system:
+
+#### **Quick Commands**
+```bash
+# Start everything
+./start.sh
+
+# Stop everything  
+./stop.sh
+```
+
+#### **What Happens When You Start**
+1. **Environment Check** - Validates Python version, packages, and directory structure
+2. **Port Availability** - Ensures ports 8000 and 5173 are free
+3. **Backend Start** - Launches FastAPI backend with uvicorn
+4. **Health Check** - Waits for backend to respond to health endpoint
+5. **Frontend Start** - Launches NiceGUI frontend
+6. **Health Check** - Waits for frontend to become available
+7. **Monitoring** - Starts background monitoring for auto-recovery
+8. **Status Display** - Shows running status and access URLs
+
+#### **What Happens When You Stop**
+1. **Process Discovery** - Finds all Smart Second Brain processes by name and port
+2. **Graceful Shutdown** - Sends SIGTERM to all processes
+3. **Timeout Handling** - Waits up to 10 seconds for graceful shutdown
+4. **Force Stop** - Sends SIGKILL if graceful shutdown fails
+5. **Cleanup** - Removes process references and reports status
+
+#### **Auto-Recovery Features**
+- **Health Checks** - Continuously monitors component health
+- **Auto-Restart** - Automatically restarts crashed components
+- **Process Monitoring** - Tracks all running processes
+- **Graceful Shutdown** - Handles system signals properly
+
+#### **Troubleshooting**
+```bash
+# If you get port conflicts
+./stop.sh
+./start.sh
+
+# Check what's running
+ps aux | grep -E "(uvicorn|python app.py)"
+
+# Check ports
+lsof -i :8000
+lsof -i :5173
+
+# Manual process management
+kill -TERM <PID>
+kill -KILL <PID>  # Force kill if needed
+```
+
+### Manual Component Management
+
+If you prefer to start components individually:
+
+```bash
+# Backend only
+uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+
+# Frontend only  
+cd frontend && python app.py
+
+# Or with conda environment
+PYTHONPATH=/path/to/project /opt/miniconda3/bin/uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ## 🔐 Environment Variables
