@@ -21,6 +21,7 @@ sys.path.insert(0, str(project_root))
 from agentic.workflows.master_graph_builder import MasterGraphBuilder
 from agentic.core.knowledge_state import KnowledgeState
 from shared.utils.logging_config import setup_logging
+from api.core.config import settings
 
 # Set up logging
 logger = setup_logging("graph_api")
@@ -39,8 +40,8 @@ def get_graph_builder() -> MasterGraphBuilder:
 
     if graph_builder is None:
         # Initialize with environment-based configuration
-        api_key = os.getenv("OPENAI_API_KEY")
-        azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT_URL")
+        api_key = settings.openai_api_key
+        azure_endpoint = settings.azure_openai_endpoint_url
 
         if not api_key:
             raise HTTPException(
@@ -49,9 +50,42 @@ def get_graph_builder() -> MasterGraphBuilder:
             )
 
         try:
-            graph_builder = MasterGraphBuilder()
+            # Initialize with proper models
+            from langchain_openai import AzureOpenAIEmbeddings, AzureChatOpenAI
+            
+            # Initialize Azure embedding model
+            embedding_model = AzureOpenAIEmbeddings(
+                azure_deployment="text-embedding-3-small",  # Your embedding deployment name
+                openai_api_version="2024-12-01-preview",
+                azure_endpoint=azure_endpoint,
+                openai_api_key=api_key
+            )
+            
+            # Initialize Azure LLM
+            llm = AzureChatOpenAI(
+                azure_deployment="gpt-4o",  # Your LLM deployment name (from .env MODEL_NAME)
+                openai_api_version="2024-12-01-preview",
+                azure_endpoint=azure_endpoint,
+                openai_api_key=api_key,
+                temperature=0.1
+            )
+            
+            # Initialize vectorstore
+            from langchain_chroma import Chroma
+            vectorstore = Chroma(
+                collection_name="smart_second_brain",
+                embedding_function=embedding_model,
+                persist_directory="./chroma_db"
+            )
+            
+            graph_builder = MasterGraphBuilder(
+                llm=llm,
+                embedding_model=embedding_model,
+                vectorstore=vectorstore,
+                chromadb_dir="./chroma_db"
+            )
             compiled_graph = graph_builder.build()
-            logger.info("✅ Graph builder initialized")
+            logger.info("✅ Graph builder initialized with all models")
         except Exception as e:
             logger.error(f"❌ Failed to initialize graph builder: {e}")
             raise HTTPException(
