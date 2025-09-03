@@ -171,7 +171,7 @@ SMART-SECOND-BRAIN/
 │   ├── tools/                     # Agent tool implementations (future)
 │   └── workflows/                 # LangGraph workflow definitions
 │       ├── master_graph_builder.py # Main knowledge processing workflow with chunking, embedding, and storage
-│       └── document_retriever.py   # Advanced document retrieval with semantic search and re-ranking
+│       └── document_retriever.py   # Advanced document retrieval with semantic search, hybrid retrieval, and re-ranking
 ├── shared/                        # Shared utilities and common components
 │   ├── config/                    # Shared configuration management (future)
 │   ├── models/                    # Shared data models and schemas (future)
