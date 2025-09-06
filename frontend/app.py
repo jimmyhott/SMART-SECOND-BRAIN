@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """
-Smart Second Brain - NiceGUI Frontend
+Smart Second Brain - Streamlit Frontend
 A modern web interface for AI-powered knowledge management
 """
 
 import asyncio
 import json
 import time
+import base64
 from datetime import datetime
 from typing import Dict, List, Optional
+import io
 
-import httpx
-from nicegui import app, ui, run
+import streamlit as st
+import requests
+from streamlit_chat import message
 
 # Configuration
 API_BASE_URL = "http://localhost:8000"
@@ -21,59 +24,118 @@ API_ENDPOINTS = {
     "query": f"{API_BASE_URL}/smart-second-brain/api/v1/graph/query",
 }
 
-# Global state
-system_status = {
-    "health": "unknown",
-    "graph_initialized": False,
-    "vectorstore_ready": False,
-    "embedding_model_ready": False,
-    "llm_ready": False,
-    "last_check": None
-}
+# Page configuration
+st.set_page_config(
+    page_title="Smart Second Brain",
+    page_icon="second-brain.jpeg",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-recent_ingestions = []
-recent_queries = []
+# Custom CSS with Bootstrap
+st.markdown("""
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<style>
+    .health-status {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        margin-bottom: 1rem;
+        border-left: 4px solid #007bff;
+    }
+    .status-indicator {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 0.5rem;
+    }
+    .status-healthy { background: #28a745; }
+    .status-error { background: #dc3545; }
+    .status-warning { background: #ffc107; }
+    .chat-message {
+        padding: 0.75rem 1rem;
+        border-radius: 18px;
+        margin: 0.5rem 0;
+        max-width: 70%;
+        word-wrap: break-word;
+    }
+    .user-message {
+        background: #007bff;
+        color: white;
+        margin-left: auto;
+        border-bottom-right-radius: 4px;
+    }
+    .assistant-message {
+        background: #f8f9fa;
+        color: #495057;
+        border: 1px solid #dee2e6;
+        border-bottom-left-radius: 4px;
+    }
+    .upload-area {
+        border: 2px dashed #007bff;
+        border-radius: 8px;
+        padding: 2rem;
+        text-align: center;
+        background: #f8f9fa;
+        transition: all 0.3s ease;
+    }
+    .upload-area:hover {
+        border-color: #0056b3;
+        background: #e3f2fd;
+    }
+    .file-item {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 0.5rem;
+        margin: 0.25rem 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# Global UI elements (will be set in main_page)
-ingestions_display = None
-queries_display = None
-query_results = None
-document_content = None
-source_input = None
-categories_input = None
-author_input = None
-query_input = None
-thread_id_input = None
-ingest_button = None
-query_button = None
+# Initialize session state
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = []
+if 'system_health' not in st.session_state:
+    st.session_state.system_health = {
+        "health": "unknown",
+        "graph_initialized": False,
+        "vectorstore_ready": False,
+        "embedding_model_ready": False,
+        "llm_ready": False,
+        "last_check": None
+    }
+if 'uploaded_files' not in st.session_state:
+    st.session_state.uploaded_files = []
 
-# API Client
-async def api_request(endpoint: str, method: str = "GET", data: Optional[Dict] = None) -> Dict:
+# API Functions
+def api_request(endpoint: str, method: str = "GET", data: Optional[Dict] = None) -> Dict:
     """Make API request to backend"""
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            if method == "GET":
-                response = await client.get(endpoint)
-            elif method == "POST":
-                response = await client.post(endpoint, json=data)
-            else:
-                raise ValueError(f"Unsupported method: {method}")
-            
-            response.raise_for_status()
-            return response.json()
+        if method == "GET":
+            response = requests.get(endpoint, timeout=30)
+        elif method == "POST":
+            response = requests.post(endpoint, json=data, timeout=30)
+        else:
+            raise ValueError(f"Unsupported method: {method}")
+        
+        response.raise_for_status()
+        return response.json()
     except Exception as e:
         return {"error": str(e)}
 
-# System Health Functions
-async def check_system_health():
+def check_system_health():
     """Check system health status"""
-    global system_status
-    
     try:
-        result = await api_request(API_ENDPOINTS["health"])
+        result = api_request(API_ENDPOINTS["health"])
         
         if "error" not in result:
-            system_status.update({
+            st.session_state.system_health.update({
                 "health": result.get("status", "unknown"),
                 "graph_initialized": result.get("graph_initialized", False),
                 "vectorstore_ready": result.get("vectorstore_ready", False),
@@ -82,387 +144,298 @@ async def check_system_health():
                 "last_check": datetime.now().strftime("%H:%M:%S")
             })
         else:
-            system_status["health"] = "error"
+            st.session_state.system_health["health"] = "error"
             
     except Exception as e:
-        system_status["health"] = "error"
-        system_status["last_check"] = datetime.now().strftime("%H:%M:%S")
+        st.session_state.system_health["health"] = "error"
+        st.session_state.system_health["last_check"] = datetime.now().strftime("%H:%M:%S")
 
-async def auto_refresh_health():
-    """Auto-refresh health status every 10 seconds"""
-    while True:
-        await check_system_health()
-        await asyncio.sleep(10)
-
-# Document Ingestion Functions
-async def ingest_document():
+def ingest_document(content: str, source: str = "", categories: str = "", author: str = ""):
     """Ingest a document into the knowledge base"""
-    global recent_ingestions
-    
-    if not document_content.value.strip():
-        ui.notify("Please enter document content", type="warning")
-        return
-    
-    # Show loading state
-    ingest_button.disable()
-    ingest_button.text = "Processing..."
+    if not content.strip():
+        st.error("Please enter document content")
+        return False
     
     try:
         data = {
-            "document": document_content.value.strip(),
-            "source": source_input.value or "manual_input",
-            "categories": [cat.strip() for cat in categories_input.value.split(",") if cat.strip()] if categories_input.value else [],
+            "document": content.strip(),
+            "source": source or "manual_input",
+            "categories": [cat.strip() for cat in categories.split(",") if cat.strip()] if categories else [],
             "metadata": {
-                "author": author_input.value or "User",
+                "author": author or "User",
                 "date": datetime.now().isoformat(),
-                "frontend": "nicegui"
+                "frontend": "streamlit"
             }
         }
         
-        result = await api_request(API_ENDPOINTS["ingest"], "POST", data)
+        result = api_request(API_ENDPOINTS["ingest"], "POST", data)
         
         if "error" not in result:
-            # Add to recent ingestions
-            recent_ingestions.insert(0, {
-                "timestamp": datetime.now().isoformat(),
-                "status": result.get("result", {}).get("status", "completed"),
-                "execution_time": result.get("execution_time", 0),
-                "thread_id": result.get("thread_id", "unknown"),
-                "content": document_content.value[:100] + "..." if len(document_content.value) > 100 else document_content.value
-            })
-            
-            # Keep only last 10
-            recent_ingestions = recent_ingestions[:10]
-            
-            # Clear form
-            document_content.value = ""
-            source_input.value = ""
-            categories_input.value = ""
-            author_input.value = ""
-            
-            ui.notify("Document ingested successfully!", type="positive")
-            update_ingestions_display()
+            st.success("Document ingested successfully!")
+            return True
         else:
-            ui.notify(f"Error ingesting document: {result['error']}", type="negative")
+            st.error(f"Error ingesting document: {result['error']}")
+            return False
             
     except Exception as e:
-        ui.notify(f"Error: {str(e)}", type="negative")
-    
-    finally:
-        # Reset button
-        ingest_button.enable()
-        ingest_button.text = "Ingest Document"
+        st.error(f"Error: {str(e)}")
+        return False
 
-# Knowledge Query Functions
-async def query_knowledge():
+def query_knowledge(query: str, thread_id: str = None):
     """Query the knowledge base"""
-    global recent_queries
-    
-    if not query_input.value.strip():
-        ui.notify("Please enter a query", type="warning")
-        return
-    
-    # Show loading state
-    query_button.disable()
-    query_button.text = "Processing..."
+    if not query.strip():
+        st.error("Please enter a query")
+        return None
     
     try:
         data = {
-            "query": query_input.value.strip(),
-            "thread_id": thread_id_input.value if thread_id_input.value else None
+            "query": query.strip(),
+            "thread_id": thread_id if thread_id else None
         }
         
-        result = await api_request(API_ENDPOINTS["query"], "POST", data)
+        result = api_request(API_ENDPOINTS["query"], "POST", data)
         
         if "error" not in result:
-            # Add to recent queries
-            recent_queries.insert(0, {
-                "timestamp": datetime.now().isoformat(),
-                "query": query_input.value,
+            return {
                 "answer": result.get("result", {}).get("generated_answer", "No answer generated"),
                 "execution_time": result.get("execution_time", 0),
                 "thread_id": result.get("thread_id", "unknown"),
-                "retrieved_docs": len(result.get("result", {}).get("retrieved_docs", []))
-            })
-            
-            # Keep only last 10
-            recent_queries = recent_queries[:10]
-            
-            # Display results
-            query_results.clear()
-            with query_results:
-                ui.html(f"""
-                    <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px; margin: 1rem 0;">
-                        <h4 style="margin: 0 0 0.5rem 0; color: #495057;">AI Response:</h4>
-                        <p style="margin: 0; line-height: 1.6;">{result.get("result", {}).get("generated_answer", "No answer generated")}</p>
-                    </div>
-                """)
-                
-                if result.get("result", {}).get("retrieved_docs"):
-                    ui.html(f"""
-                        <div style="padding: 1rem; background: #e9ecef; border-radius: 8px; margin: 1rem 0;">
-                            <h4 style="margin: 0 0 0.5rem 0; color: #495057;">Retrieved Documents ({len(result.get("result", {}).get("retrieved_docs", []))}):</h4>
-                        </div>
-                    """)
-                    
-                    for i, doc in enumerate(result.get("result", {}).get("retrieved_docs", [])[:3]):
-                        ui.html(f"""
-                            <div style="padding: 0.75rem; background: white; border: 1px solid #dee2e6; border-radius: 6px; margin: 0.5rem 0;">
-                                <strong>Document {i+1}:</strong> {doc.get("content", "")[:200]}...
-                                <br><small style="color: #6c757d;">Source: {doc.get("metadata", {}).get("source", "unknown")}</small>
-                            </div>
-                        """)
-            
-            # Clear query input
-            query_input.value = ""
-            
-            ui.notify("Query processed successfully!", type="positive")
-            update_queries_display()
+                "retrieved_docs": result.get("result", {}).get("retrieved_docs", [])
+            }
         else:
-            ui.notify(f"Error processing query: {result['error']}", type="negative")
+            st.error(f"Error processing query: {result['error']}")
+            return None
             
     except Exception as e:
-        ui.notify(f"Error: {str(e)}", type="negative")
-    
-    finally:
-        # Reset button
-        query_button.enable()
-        query_button.text = "Query Knowledge"
+        st.error(f"Error: {str(e)}")
+        return None
 
-# UI Update Functions
-def update_ingestions_display():
-    """Update the recent ingestions display"""
-    if ingestions_display:
-        ingestions_display.clear()
-        
-        if not recent_ingestions:
-            with ingestions_display:
-                ui.html('<p style="text-align: center; color: #6c757d; padding: 2rem;">No documents ingested yet</p>')
-            return
-        
-        with ingestions_display:
-            for ingestion in recent_ingestions:
-                ui.html(f"""
-                    <div style="padding: 0.75rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; margin: 0.5rem 0;">
-                        <div style="display: flex; justify-content: space-between; align-items: start;">
-                            <div style="flex: 1;">
-                                <p style="margin: 0; font-weight: 500; color: #495057;">{ingestion['status']}</p>
-                                <p style="margin: 0.25rem 0 0 0; font-size: 0.875rem; color: #6c757d;">{ingestion['content']}</p>
-                                <p style="margin: 0.25rem 0 0 0; font-size: 0.75rem; color: #6c757d;">{ingestion['timestamp']}</p>
-                            </div>
-                            <span style="font-size: 0.75rem; color: #6c757d;">{ingestion['execution_time']:.2f}s</span>
-                        </div>
-                    </div>
-                """)
-
-def update_queries_display():
-    """Update the recent queries display"""
-    if queries_display:
-        queries_display.clear()
-        
-        if not recent_queries:
-            with queries_display:
-                ui.html('<p style="text-align: center; color: #6c757d; padding: 2rem;">No queries made yet</p>')
-            return
-        
-        with queries_display:
-            for query in recent_queries:
-                ui.html(f"""
-                    <div style="padding: 0.75rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; margin: 0.5rem 0;">
-                        <div style="display: flex; justify-content: space-between; align-items: start;">
-                            <div style="flex: 1;">
-                                <p style="margin: 0; font-weight: 500; color: #495057;">{query['query'][:50]}{'...' if len(query['query']) > 50 else ''}</p>
-                                <p style="margin: 0.25rem 0 0 0; font-size: 0.875rem; color: #6c757d;">{query['answer'][:100]}{'...' if len(query['answer']) > 100 else ''}</p>
-                                <p style="margin: 0.25rem 0 0 0; font-size: 0.75rem; color: #6c757d;">{query['timestamp']} • {query['retrieved_docs']} docs</p>
-                            </div>
-                            <span style="font-size: 0.75rem; color: #6c757d;">{query['execution_time']:.2f}s</span>
-                        </div>
-                    </div>
-                """)
-
-def get_status_color(status: str) -> str:
-    """Get color for status indicators"""
-    if status == "healthy":
-        return "#28a745"
-    elif status == "error":
-        return "#dc3545"
-    else:
-        return "#ffc107"
-
-# Main UI Layout
-@ui.page('/')
-def main_page():
-    """Main application page"""
-    global ingestions_display, queries_display, query_results
-    global document_content, source_input, categories_input, author_input
-    global query_input, thread_id_input, ingest_button, query_button
-    
+# Main App
+def main():
     # Header
-    with ui.header().classes('bg-blue-600 text-white'):
-        ui.html('''
-            <div style="display: flex; align-items: center; gap: 0.75rem;">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.88 2.5 2.5 0 0 1-.44-4.96A2.5 2.5 0 0 1 4.5 9.5a2.5 2.5 0 0 1 1.06-2.06A2.5 2.5 0 0 1 9.5 2Z"/>
-                    <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.88 2.5 2.5 0 0 0 .44-4.96A2.5 2.5 0 0 0 19.5 9.5a2.5 2.5 0 0 0-1.06-2.06A2.5 2.5 0 0 0 14.5 2Z"/>
-                </svg>
-                <span style="font-size: 1.5rem; font-weight: 600;">Smart Second Brain</span>
+    col1, col2, col3 = st.columns([0.1, 0.6, 0.3])
+    
+    with col1:
+        st.image("second-brain.jpeg", width=40)
+    
+    with col2:
+        st.markdown("""
+        <div class="d-flex align-items-center">
+            <h1 class="me-3 mb-0">Smart Second Brain</h1>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="d-flex align-items-center h-100">
+            <span class="text-muted">AI-Powered Knowledge Management</span>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Health Status (Compact)
+    check_system_health()
+    health = st.session_state.system_health
+    
+    health_color = "status-healthy" if health['health'] == 'healthy' else "status-error" if health['health'] == 'error' else "status-warning"
+    
+    st.markdown(f"""
+    <div class="health-status">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <span class="status-indicator {health_color}"></span>
+                <strong>System: {health['health'].title()}</strong>
+                <span class="status-indicator {'status-healthy' if health['graph_initialized'] else 'status-error'} ms-3"></span>
+                <span class="me-3">Graph</span>
+                <span class="status-indicator {'status-healthy' if health['vectorstore_ready'] else 'status-error'}"></span>
+                <span class="me-3">Vector</span>
+                <span class="status-indicator {'status-healthy' if health['llm_ready'] else 'status-error'}"></span>
+                <span>AI</span>
             </div>
-        ''').classes('q-mr-md')
-        ui.label('AI-Powered Knowledge Management').classes('text-subtitle2')
-        
-        with ui.row().classes('q-ml-auto'):
-            ui.button('🔄 Refresh Health', on_click=check_system_health).classes('q-mr-sm')
-            ui.button('📚 API Docs', on_click=lambda: ui.open(API_BASE_URL + '/docs')).classes('q-mr-sm')
+            <small class="text-muted">{health.get('last_check', 'Never')}</small>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Main content
-    with ui.column().classes('full-width q-pa-md'):
-        
-        # System Health Section
-        with ui.card().classes('full-width q-mb-md'):
-            ui.label('🏥 System Health').classes('text-h6 q-mb-md')
-            
-            with ui.row().classes('full-width q-col-gutter-sm'):
-                with ui.column().classes('col-3'):
-                    ui.html(f"""
-                        <div style="text-align: center; padding: 0.5rem;">
-                            <div style="width: 40px; height: 40px; border-radius: 50%; background: {get_status_color(system_status['health'])}; margin: 0 auto 0.25rem auto; display: flex; align-items: center; justify-content: center; color: white; font-size: 1rem;">
-                                {'✅' if system_status['health'] == 'healthy' else '❌' if system_status['health'] == 'error' else '⚠️'}
-                            </div>
-                            <p style="margin: 0; font-weight: 500; font-size: 0.875rem;">Overall</p>
-                            <p style="margin: 0; font-size: 0.75rem; color: #6c757d;">{system_status['health'].title()}</p>
-                        </div>
-                    """)
-                
-                with ui.column().classes('col-3'):
-                    ui.html(f"""
-                        <div style="text-align: center; padding: 0.5rem;">
-                            <div style="width: 40px; height: 40px; border-radius: 50%; background: {'#28a745' if system_status['graph_initialized'] else '#dc3545'}; margin: 0 auto 0.25rem auto; display: flex; align-items: center; justify-content: center; color: white; font-size: 1rem;">
-                                {'✅' if system_status['graph_initialized'] else '❌'}
-                            </div>
-                            <p style="margin: 0; font-weight: 500; font-size: 0.875rem;">Graph</p>
-                            <p style="margin: 0; font-size: 0.75rem; color: #6c757d;">{'Ready' if system_status['graph_initialized'] else 'Not Ready'}</p>
-                        </div>
-                    """)
-                
-                with ui.column().classes('col-3'):
-                    ui.html(f"""
-                        <div style="text-align: center; padding: 0.5rem;">
-                            <div style="width: 40px; height: 40px; border-radius: 50%; background: {'#28a745' if system_status['vectorstore_ready'] else '#dc3545'}; margin: 0 auto 0.25rem auto; display: flex; align-items: center; justify-content: center; color: white; font-size: 1rem;">
-                                {'✅' if system_status['vectorstore_ready'] else '❌'}
-                            </div>
-                            <p style="margin: 0; font-weight: 500; font-size: 0.75rem;">Vector Store</p>
-                            <p style="margin: 0; font-size: 0.75rem; color: #6c757d;">{'Ready' if system_status['vectorstore_ready'] else 'Not Ready'}</p>
-                        </div>
-                    """)
-                
-                with ui.column().classes('col-3'):
-                    ui.html(f"""
-                        <div style="text-align: center; padding: 0.5rem;">
-                            <div style="width: 40px; height: 40px; border-radius: 50%; background: {'#28a745' if system_status['llm_ready'] else '#dc3545'}; margin: 0 auto 0.25rem auto; display: flex; align-items: center; justify-content: center; color: white; font-size: 1rem;">
-                                {'✅' if system_status['llm_ready'] else '❌'}
-                            </div>
-                            <p style="margin: 0; font-weight: 500; font-size: 0.875rem;">AI Model</p>
-                            <p style="margin: 0; font-size: 0.75rem; color: #6c757d;">{'Ready' if system_status['llm_ready'] else 'Not Ready'}</p>
-                        </div>
-                    """)
-            
-            if system_status['last_check']:
-                ui.html(f'<p style="text-align: center; margin: 0.5rem 0 0 0; font-size: 0.75rem; color: #6c757d;">Last checked: {system_status["last_check"]}</p>')
-        
-        # Main Features Grid
-        with ui.row().classes('full-width q-col-gutter-md'):
-            
-            # Document Ingestion
-            with ui.column().classes('col-12 col-md-6'):
-                with ui.card().classes('full-width'):
-                    ui.label('📄 Document Ingestion').classes('text-h6 q-mb-md')
-                    
-                    # Form inputs
-                    document_content = ui.textarea('Document Content', placeholder='Paste or type your document content here...').classes('full-width q-mb-md')
-                    document_content.style('min-height: 120px')
-                    
-                    with ui.row().classes('full-width q-col-gutter-sm'):
-                        source_input = ui.input('Source', placeholder='e.g., webpage, document, manual').classes('col-6')
-                        categories_input = ui.input('Categories (comma-separated)', placeholder='e.g., ai, research, tutorial').classes('col-6')
-                    
-                    author_input = ui.input('Author', placeholder='Your name or organization').classes('full-width q-mb-md')
-                    
-                    ingest_button = ui.button('Ingest Document', on_click=ingest_document).classes('full-width')
-                    
-                    # Recent ingestions
-                    ui.label('Recent Ingestions').classes('text-subtitle1 q-mt-lg q-mb-md')
-                    ingestions_display = ui.column().classes('full-width')
-                    update_ingestions_display()
-            
-            # Knowledge Query
-            with ui.column().classes('col-12 col-md-6'):
-                with ui.card().classes('full-width'):
-                    ui.label('🔍 Knowledge Query').classes('text-h6 q-mb-md')
-                    
-                    # Query inputs
-                    query_input = ui.textarea('Your Question', placeholder='Ask anything about your knowledge base...').classes('full-width q-mb-md')
-                    query_input.style('min-height: 80px')
-                    
-                    thread_id_input = ui.input('Thread ID (optional)', placeholder='For conversation continuity').classes('full-width q-mb-md')
-                    
-                    query_button = ui.button('Query Knowledge', on_click=query_knowledge).classes('full-width')
-                    
-                    # Query results
-                    ui.label('Query Results').classes('text-subtitle1 q-mt-lg q-mb-md')
-                    query_results = ui.column().classes('full-width')
-                    
-                    # Recent queries
-                    ui.label('Recent Queries').classes('text-subtitle1 q-mt-lg q-mb-md')
-                    queries_display = ui.column().classes('full-width')
-                    update_queries_display()
-        
-        # Quick Start Guide
-        with ui.card().classes('full-width q-mt-md'):
-            ui.label('🚀 Quick Start Guide').classes('text-h6 q-mb-md')
-            
-            with ui.row().classes('full-width q-col-gutter-md'):
-                with ui.column().classes('col-12 col-md-4'):
-                    ui.html("""
-                        <div style="text-align: center; padding: 1rem;">
-                            <div style="width: 50px; height: 50px; background: #007bff; border-radius: 50%; margin: 0 auto 0.5rem auto; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">1</div>
-                            <h5 style="margin: 0 0 0.5rem 0;">Check System Health</h5>
-                            <p style="margin: 0; font-size: 0.875rem; color: #6c757d;">Ensure your API is running and all services are healthy</p>
-                        </div>
-                    """)
-                
-                with ui.column().classes('col-12 col-md-4'):
-                    ui.html("""
-                        <div style="text-align: center; padding: 1rem;">
-                            <div style="width: 50px; height: 50px; background: #28a745; border-radius: 50%; margin: 0 auto 0.5rem auto; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">2</div>
-                            <h5 style="margin: 0 0 0.5rem 0;">Ingest Documents</h5>
-                            <p style="margin: 0; font-size: 0.875rem; color: #6c757d;">Upload or paste content to build your knowledge base</p>
-                        </div>
-                    """)
-                
-                with ui.column().classes('col-12 col-md-4'):
-                    ui.html("""
-                        <div style="text-align: center; padding: 1rem;">
-                            <div style="width: 50px; height: 50px; background: #ffc107; border-radius: 50%; margin: 0 auto 0.5rem auto; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">3</div>
-                            <h5 style="margin: 0 0 0.5rem 0;">Ask Questions</h5>
-                            <p style="margin: 0; font-size: 0.875rem; color: #6c757d;">Query your knowledge base with natural language</p>
-                        </div>
-                    """)
-
-# Initialize the application
-async def init_app():
-    """Initialize the application"""
-    # Check initial health
-    await check_system_health()
+    # Tabs
+    tab1, tab2 = st.tabs(["📄 Document Ingestion", "💬 Chat with Knowledge Base"])
     
-    # Start auto-refresh
-    asyncio.create_task(auto_refresh_health())
+    with tab1:
+        st.markdown("### Upload and Process Documents")
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.markdown("#### 📁 Upload PDF Files")
+            
+            # File uploader
+            uploaded_files = st.file_uploader(
+                "Choose PDF files",
+                type=['pdf'],
+                accept_multiple_files=True,
+                help="Upload multiple PDF files to process"
+            )
+            
+            if uploaded_files:
+                st.session_state.uploaded_files = uploaded_files
+                
+                # Display uploaded files
+                st.markdown("**Uploaded Files:**")
+                for i, file in enumerate(uploaded_files):
+                    with st.container():
+                        st.markdown(f"""
+                        <div class="file-item">
+                            <div>
+                                <strong>{file.name}</strong><br>
+                                <small class="text-muted">{file.size} bytes</small>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                # PDF metadata form
+                st.markdown("**PDF Metadata:**")
+                with st.form("pdf_metadata"):
+                    pdf_source = st.text_input("Source", placeholder="e.g., research paper, manual, report", key="pdf_source")
+                    pdf_categories = st.text_input("Categories (comma-separated)", placeholder="e.g., ai, research, tutorial", key="pdf_categories")
+                    pdf_author = st.text_input("Author", placeholder="Document author or organization", key="pdf_author")
+                    
+                    pdf_submitted = st.form_submit_button("Process Uploaded PDFs", type="primary")
+                    
+                    if pdf_submitted:
+                        if not pdf_source.strip():
+                            st.error("Please provide a source for the PDF files")
+                        else:
+                            with st.spinner("Processing PDF files..."):
+                                # For now, show info message since PDF processing API needs to be implemented
+                                st.info(f"PDF processing API will be implemented later. Ready to process {len(uploaded_files)} files with source: '{pdf_source}', categories: '{pdf_categories}', author: '{pdf_author}'")
+                                
+                                # Clear the uploaded files after processing
+                                st.session_state.uploaded_files = []
+                                st.rerun()
+        
+        with col2:
+            st.markdown("#### ✏️ Manual Document Input")
+            
+            # Manual input form
+            with st.form("manual_ingest"):
+                content = st.text_area(
+                    "Document Content",
+                    placeholder="Paste or type your document content here...",
+                    height=200
+                )
+                
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    source = st.text_input("Source", placeholder="e.g., webpage, document, manual")
+                with col_b:
+                    categories = st.text_input("Categories (comma-separated)", placeholder="e.g., ai, research, tutorial")
+                
+                author = st.text_input("Author", placeholder="Your name or organization")
+                
+                submitted = st.form_submit_button("Ingest Document", type="primary")
+                
+                if submitted:
+                    with st.spinner("Processing document..."):
+                        success = ingest_document(content, source, categories, author)
+                        if success:
+                            st.rerun()
+    
+    with tab2:
+        st.markdown("### Chat with Your Knowledge Base")
+        
+        # Chat container
+        chat_container = st.container()
+        
+        with chat_container:
+            # Display chat history
+            for i, chat in enumerate(st.session_state.chat_history):
+                if chat["type"] == "user":
+                    st.markdown(f"""
+                    <div class="d-flex justify-content-end mb-2">
+                        <div class="chat-message user-message">
+                            {chat["content"]}
+                            <br><small style="opacity: 0.8;">{chat["timestamp"]}</small>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div class="d-flex justify-content-start mb-2">
+                        <div class="chat-message assistant-message">
+                            {chat["content"]}
+                            <br><small class="text-muted">
+                                {chat["timestamp"]}
+                                {f" • {chat.get('execution_time', 0):.2f}s" if chat.get('execution_time') else ""}
+                                {f" • {len(chat.get('retrieved_docs', []))} docs" if chat.get('retrieved_docs') else ""}
+                            </small>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Show retrieved documents
+                    if chat.get("retrieved_docs") and not chat.get("error", False):
+                        for j, doc in enumerate(chat["retrieved_docs"][:2]):
+                            st.markdown(f"""
+                            <div class="ms-4 mb-2 p-2 bg-light border-start border-primary border-3 rounded">
+                                <small class="text-muted fw-bold">Source {j+1}: {doc.get('metadata', {}).get('source', 'unknown')}</small>
+                                <p class="mb-0 small">{doc.get('content', '')[:150]}{'...' if len(doc.get('content', '')) > 150 else ''}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+        
+        # Chat input
+        with st.form("chat_form"):
+            col_input, col_button = st.columns([4, 1])
+            
+            with col_input:
+                user_input = st.text_input(
+                    "Type your question...",
+                    placeholder="Ask anything about your knowledge base...",
+                    label_visibility="collapsed"
+                )
+            
+            with col_button:
+                send_button = st.form_submit_button("Send", type="primary")
+            
+            # Advanced options
+            with st.expander("Advanced Options"):
+                thread_id = st.text_input("Thread ID (optional)", placeholder="For conversation continuity")
+        
+        # Handle chat submission
+        if send_button and user_input:
+            # Add user message to history
+            st.session_state.chat_history.append({
+                "type": "user",
+                "content": user_input,
+                "timestamp": datetime.now().strftime("%H:%M:%S")
+            })
+            
+            # Get AI response
+            with st.spinner("Thinking..."):
+                result = query_knowledge(user_input, thread_id)
+                
+                if result:
+                    # Add assistant response to history
+                    st.session_state.chat_history.append({
+                        "type": "assistant",
+                        "content": result["answer"],
+                        "timestamp": datetime.now().strftime("%H:%M:%S"),
+                        "execution_time": result["execution_time"],
+                        "retrieved_docs": result["retrieved_docs"]
+                    })
+                else:
+                    # Add error message
+                    st.session_state.chat_history.append({
+                        "type": "assistant",
+                        "content": "Sorry, I encountered an error processing your request.",
+                        "timestamp": datetime.now().strftime("%H:%M:%S"),
+                        "error": True
+                    })
+            
+            st.rerun()
+        
+        # Clear chat button
+        if st.button("Clear Chat History"):
+            st.session_state.chat_history = []
+            st.rerun()
 
-# Run the application
-if __name__ in {"__main__", "__mp_main__"}:
-    app.on_startup(init_app)
-    ui.run(
-        title="Smart Second Brain",
-        port=5173,
-        show=True,
-        reload=False
-    )
+if __name__ == "__main__":
+    main()
