@@ -21,6 +21,7 @@ API_BASE_URL = "http://localhost:8000"
 API_ENDPOINTS = {
     "health": f"{API_BASE_URL}/smart-second-brain/api/v1/graph/health",
     "ingest": f"{API_BASE_URL}/smart-second-brain/api/v1/graph/ingest",
+    "ingest_pdfs": f"{API_BASE_URL}/smart-second-brain/api/v1/graph/ingest-pdfs",
     "query": f"{API_BASE_URL}/smart-second-brain/api/v1/graph/query",
 }
 
@@ -114,13 +115,16 @@ if 'uploaded_files' not in st.session_state:
     st.session_state.uploaded_files = []
 
 # API Functions
-def api_request(endpoint: str, method: str = "GET", data: Optional[Dict] = None) -> Dict:
+def api_request(endpoint: str, method: str = "GET", data: Optional[Dict] = None, files: Optional[Dict] = None) -> Dict:
     """Make API request to backend"""
     try:
         if method == "GET":
             response = requests.get(endpoint, timeout=30)
         elif method == "POST":
-            response = requests.post(endpoint, json=data, timeout=30)
+            if files:
+                response = requests.post(endpoint, files=files, data=data, timeout=60)
+            else:
+                response = requests.post(endpoint, json=data, timeout=30)
         else:
             raise ValueError(f"Unsupported method: {method}")
         
@@ -175,6 +179,63 @@ def ingest_document(content: str, source: str = "", categories: str = "", author
             return True
         else:
             st.error(f"Error ingesting document: {result['error']}")
+            return False
+            
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+        return False
+
+def ingest_multiple_pdfs(uploaded_files: List, source: str, categories: str = "", author: str = "", metadata: str = ""):
+    """Ingest multiple PDF files into the knowledge base"""
+    if not uploaded_files:
+        st.error("Please upload PDF files")
+        return False
+    
+    if not source.strip():
+        st.error("Please provide a source for the PDF files")
+        return False
+    
+    try:
+        # Prepare files for upload
+        files = []
+        for file in uploaded_files:
+            files.append(("files", (file.name, file.getvalue(), "application/pdf")))
+        
+        # Prepare form data
+        data = {
+            "source": source.strip(),
+            "categories": categories.strip() if categories else "",
+            "author": author.strip() if author else "",
+            "metadata": metadata.strip() if metadata else ""
+        }
+        
+        # Make API request
+        result = api_request(API_ENDPOINTS["ingest_pdfs"], "POST", data, files)
+        
+        if "error" not in result:
+            # Display success message with details
+            total_files = result.get("total_files", 0)
+            processed_files = result.get("processed_files", 0)
+            failed_files = result.get("failed_files", 0)
+            execution_time = result.get("execution_time", 0)
+            
+            if processed_files == total_files:
+                st.success(f"✅ All {processed_files} PDF files processed successfully in {execution_time:.2f}s!")
+            else:
+                st.warning(f"⚠️ {processed_files}/{total_files} files processed successfully ({failed_files} failed) in {execution_time:.2f}s")
+            
+            # Show detailed results
+            if result.get("results"):
+                with st.expander("📊 Processing Details", expanded=False):
+                    for file_result in result["results"]:
+                        filename = file_result.get("filename", "unknown")
+                        chunks = file_result.get("chunks_created", 0)
+                        status = "✅" if file_result.get("success", False) else "❌"
+                        st.write(f"{status} **{filename}**: {chunks} chunks created")
+            
+            return True
+        else:
+            st.error(f"Error processing PDFs: {result['error']}")
             return False
             
     except Exception as e:
@@ -292,25 +353,65 @@ def main():
                         """, unsafe_allow_html=True)
                 
                 # PDF metadata form
-                st.markdown("**PDF Metadata:**")
+                st.markdown("**PDF Batch Metadata:**")
                 with st.form("pdf_metadata"):
-                    pdf_source = st.text_input("Source", placeholder="e.g., research paper, manual, report", key="pdf_source")
-                    pdf_categories = st.text_input("Categories (comma-separated)", placeholder="e.g., ai, research, tutorial", key="pdf_categories")
-                    pdf_author = st.text_input("Author", placeholder="Document author or organization", key="pdf_author")
+                    col1, col2 = st.columns(2)
                     
-                    pdf_submitted = st.form_submit_button("Process Uploaded PDFs", type="primary")
+                    with col1:
+                        pdf_source = st.text_input(
+                            "Source *", 
+                            placeholder="e.g., research papers, company docs, training materials", 
+                            key="pdf_source",
+                            help="Required: Source identifier for all PDFs in this batch"
+                        )
+                        pdf_categories = st.text_input(
+                            "Categories (comma-separated)", 
+                            placeholder="e.g., ai, research, tutorial, legal", 
+                            key="pdf_categories",
+                            help="Optional: Categories to tag all PDFs in this batch"
+                        )
+                    
+                    with col2:
+                        pdf_author = st.text_input(
+                            "Author/Organization", 
+                            placeholder="Document author or organization", 
+                            key="pdf_author",
+                            help="Optional: Author or organization for all PDFs"
+                        )
+                        pdf_metadata = st.text_input(
+                            "Additional Metadata", 
+                            placeholder="e.g., project: AI research, version: 1.0", 
+                            key="pdf_metadata",
+                            help="Optional: Additional metadata as JSON string"
+                        )
+                    
+                    # Batch processing info
+                    st.markdown(f"""
+                    <div class="alert alert-info" role="alert">
+                        <strong>📋 Batch Processing:</strong> {len(uploaded_files)} PDF files will be processed together with the same metadata.
+                        <br><small>Each PDF will be chunked and embedded into the knowledge base.</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    pdf_submitted = st.form_submit_button("🚀 Process PDF Batch", type="primary")
                     
                     if pdf_submitted:
                         if not pdf_source.strip():
-                            st.error("Please provide a source for the PDF files")
+                            st.error("❌ Please provide a source for the PDF files")
                         else:
-                            with st.spinner("Processing PDF files..."):
-                                # For now, show info message since PDF processing API needs to be implemented
-                                st.info(f"PDF processing API will be implemented later. Ready to process {len(uploaded_files)} files with source: '{pdf_source}', categories: '{pdf_categories}', author: '{pdf_author}'")
+                            with st.spinner("🔄 Processing PDF files..."):
+                                success = ingest_multiple_pdfs(
+                                    uploaded_files, 
+                                    pdf_source, 
+                                    pdf_categories, 
+                                    pdf_author, 
+                                    pdf_metadata
+                                )
                                 
-                                # Clear the uploaded files after processing
-                                st.session_state.uploaded_files = []
-                                st.rerun()
+                                if success:
+                                    # Clear the uploaded files after successful processing
+                                    st.session_state.uploaded_files = []
+                                    st.rerun()
         
         with col2:
             st.markdown("#### ✏️ Manual Document Input")
