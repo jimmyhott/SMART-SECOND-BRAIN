@@ -30,12 +30,14 @@ Version: 0.1.0
 
 import os
 import sys
+import json
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 from datetime import datetime
 from pydantic import BaseModel, Field
+from io import BytesIO
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Form
 
 # =============================================================================
 # PATH CONFIGURATION
@@ -295,6 +297,136 @@ class HealthResponse(BaseModel):
     timestamp: datetime
 
 
+class PDFIngestResult(BaseModel):
+    """
+    Individual PDF processing result.
+    
+    This model represents the result of processing a single PDF file,
+    including success status, processing metrics, and any errors.
+    
+    Attributes:
+        filename: Name of the processed PDF file
+        success: Whether the PDF was processed successfully
+        chunks_created: Number of text chunks created from the PDF
+        thread_id: Unique identifier for the processing thread
+        error: Error message if processing failed
+        processing_time: Time taken to process this PDF in seconds
+    """
+    filename: str
+    success: bool
+    chunks_created: int = 0
+    thread_id: Optional[str] = None
+    error: Optional[str] = None
+    processing_time: float = 0.0
+
+
+class MultiIngestResponse(BaseModel):
+    """
+    Response model for multiple PDF ingestion.
+    
+    This model provides comprehensive results for batch PDF processing,
+    including individual file results and overall batch statistics.
+    
+    Attributes:
+        success: Whether at least one PDF was processed successfully
+        total_files: Total number of PDF files submitted
+        processed_files: Number of PDFs processed successfully
+        failed_files: Number of PDFs that failed processing
+        results: List of individual PDF processing results
+        execution_time: Total time for the entire batch operation
+        timestamp: When the batch processing completed
+    """
+    success: bool
+    total_files: int
+    processed_files: int
+    failed_files: int
+    results: List[PDFIngestResult]
+    execution_time: float
+    timestamp: datetime
+
+    class Config:
+        """Pydantic configuration for response validation and documentation."""
+        schema_extra = {
+            "example": {
+                "success": True,
+                "total_files": 3,
+                "processed_files": 2,
+                "failed_files": 1,
+                "results": [
+                    {
+                        "filename": "document1.pdf",
+                        "success": True,
+                        "chunks_created": 15,
+                        "thread_id": "pdf_ingest_123_document1.pdf",
+                        "processing_time": 2.34
+                    },
+                    {
+                        "filename": "document2.pdf",
+                        "success": False,
+                        "error": "No text content found in PDF",
+                        "processing_time": 0.0
+                    }
+                ],
+                "execution_time": 5.67,
+                "timestamp": "2024-01-01T12:00:00Z"
+            }
+        }
+
+
+# =============================================================================
+# PDF PROCESSING UTILITIES
+# =============================================================================
+
+async def extract_pdf_text(file: UploadFile) -> str:
+    """
+    Extract text content from PDF file.
+    
+    This function reads a PDF file and extracts all text content using
+    PyPDF2 library. It handles multiple pages and provides error handling
+    for corrupted or invalid PDF files.
+    
+    Args:
+        file: UploadFile object containing the PDF data
+        
+    Returns:
+        str: Extracted text content from the PDF
+        
+    Raises:
+        HTTPException: If PDF text extraction fails
+    """
+    try:
+        # Read file content
+        content = await file.read()
+        
+        # Use PyPDF2 for text extraction
+        import PyPDF2
+        
+        pdf_reader = PyPDF2.PdfReader(BytesIO(content))
+        text = ""
+        
+        # Extract text from all pages
+        for page_num, page in enumerate(pdf_reader.pages):
+            try:
+                page_text = page.extract_text()
+                if page_text.strip():
+                    text += page_text + "\n"
+            except Exception as e:
+                logger.warning(f"Failed to extract text from page {page_num + 1}: {e}")
+                continue
+        
+        if not text.strip():
+            raise ValueError("No text content found in PDF")
+        
+        return text.strip()
+        
+    except Exception as e:
+        logger.error(f"PDF text extraction failed for {file.filename}: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to extract text from PDF '{file.filename}': {str(e)}"
+        )
+
+
 # =============================================================================
 # API ENDPOINTS
 # =============================================================================
@@ -531,3 +663,170 @@ async def health_check(graph_builder: MasterGraphBuilder = Depends(get_graph_bui
             llm_ready=False,
             timestamp=datetime.utcnow()
         )
+
+
+@router.post("/ingest-pdfs", response_model=MultiIngestResponse)
+async def ingest_multiple_pdfs(
+    files: List[UploadFile] = File(...),
+    source: str = Form(...),
+    categories: Optional[str] = Form(None),
+    author: Optional[str] = Form(None),
+    metadata: Optional[str] = Form(None),
+    graph_builder: MasterGraphBuilder = Depends(get_graph_builder)
+):
+    """
+    Ingest multiple PDF files into the knowledge base.
+    
+    This endpoint processes multiple PDF files in sequence, extracting text,
+    chunking content, and storing embeddings in the vector database. Each
+    PDF is processed through the complete ingestion workflow with individual
+    error handling and result tracking.
+    
+    Args:
+        files: List of PDF files to process (required)
+        source: Source identifier for all files (required)
+        categories: Comma-separated categories (optional)
+        author: Document author (optional)
+        metadata: JSON string of additional metadata (optional)
+        graph_builder: MasterGraphBuilder instance (injected dependency)
+        
+    Returns:
+        MultiIngestResponse: Processing results for all files with detailed statistics
+        
+    Raises:
+        HTTPException: If no files provided or system is unavailable
+        
+    Example:
+        POST /api/v1/graph/ingest-pdfs
+        Form data:
+        - files: [file1.pdf, file2.pdf, file3.pdf]
+        - source: "research_papers"
+        - categories: "ai,research,machine_learning"
+        - author: "Research Team"
+        - metadata: {"department": "AI Lab", "year": "2024"}
+    """
+    start_time = datetime.utcnow()
+    
+    # Validate input
+    if not files:
+        raise HTTPException(
+            status_code=400,
+            detail="No files provided. Please upload at least one PDF file."
+        )
+    
+    # Parse categories and metadata
+    category_list = []
+    if categories:
+        category_list = [cat.strip() for cat in categories.split(",") if cat.strip()]
+    
+    metadata_dict = {}
+    if metadata:
+        try:
+            metadata_dict = json.loads(metadata)
+        except json.JSONDecodeError:
+            logger.warning(f"Invalid JSON metadata provided: {metadata}")
+            metadata_dict = {}
+    
+    # Add common metadata
+    metadata_dict.update({
+        "author": author or "Unknown",
+        "source": source,
+        "categories": category_list,
+        "ingestion_date": datetime.utcnow().isoformat(),
+        "batch_ingest": True
+    })
+    
+    results = []
+    processed_count = 0
+    failed_count = 0
+    
+    # Ensure compiled graph is available
+    global compiled_graph
+    if compiled_graph is None:
+        compiled_graph = graph_builder.build()
+    
+    logger.info(f"🔄 Starting batch PDF ingestion: {len(files)} files")
+    
+    # Process each PDF file
+    for file in files:
+        file_start_time = datetime.utcnow()
+        
+        try:
+            # Validate file type
+            if not file.filename or not file.filename.lower().endswith('.pdf'):
+                results.append(PDFIngestResult(
+                    filename=file.filename or "unknown",
+                    success=False,
+                    error="Invalid file type. Only PDF files are supported.",
+                    processing_time=0.0
+                ))
+                failed_count += 1
+                continue
+            
+            # Extract text from PDF
+            pdf_content = await extract_pdf_text(file)
+            
+            # Create knowledge state for ingestion
+            state = KnowledgeState(
+                query_type="ingest",
+                raw_document=pdf_content,
+                source=f"{source}_{file.filename}",
+                categories=category_list,
+                metadata={**metadata_dict, "original_filename": file.filename}
+            )
+            
+            # Generate unique thread ID for this PDF
+            thread_id = f"pdf_ingest_{int(file_start_time.timestamp())}_{file.filename}"
+            
+            # Execute the ingestion workflow
+            logger.info(f"📄 Processing PDF: {file.filename}")
+            result = compiled_graph.invoke(
+                state,
+                config={"configurable": {"thread_id": thread_id}}
+            )
+            
+            # Calculate processing time for this file
+            file_processing_time = (datetime.utcnow() - file_start_time).total_seconds()
+            
+            # Count chunks created
+            chunks_created = len(result.get("chunks", []))
+            
+            results.append(PDFIngestResult(
+                filename=file.filename,
+                success=True,
+                chunks_created=chunks_created,
+                thread_id=thread_id,
+                processing_time=file_processing_time
+            ))
+            processed_count += 1
+            
+            logger.info(f"✅ PDF processed successfully: {file.filename} ({chunks_created} chunks)")
+            
+        except Exception as e:
+            file_processing_time = (datetime.utcnow() - file_start_time).total_seconds()
+            error_msg = str(e)
+            
+            logger.error(f"❌ Failed to process PDF {file.filename}: {error_msg}")
+            
+            results.append(PDFIngestResult(
+                filename=file.filename or "unknown",
+                success=False,
+                error=error_msg,
+                processing_time=file_processing_time
+            ))
+            failed_count += 1
+    
+    # Calculate total execution time
+    execution_time = (datetime.utcnow() - start_time).total_seconds()
+    
+    logger.info(f"🏁 Batch PDF ingestion completed: {processed_count} successful, {failed_count} failed in {execution_time:.2f}s")
+    
+    return MultiIngestResponse(
+        success=processed_count > 0,
+        total_files=len(files),
+        processed_files=processed_count,
+        failed_files=failed_count,
+        results=results,
+        execution_time=execution_time,
+        timestamp=datetime.utcnow()
+    )
