@@ -354,59 +354,61 @@ def main():
             
             # PDF metadata form (always visible)
             st.markdown("**PDF Batch Metadata:**")
-            with st.form("pdf_metadata"):
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    pdf_source = st.text_input(
-                        "Source *", 
-                        placeholder="e.g., research papers, company docs, training materials", 
-                        key="pdf_source",
-                        help="Required: Source identifier for all PDFs in this batch"
-                    )
-                    pdf_categories = st.text_input(
-                        "Categories (comma-separated)", 
-                        placeholder="e.g., ai, research, tutorial, legal", 
-                        key="pdf_categories",
-                        help="Optional: Categories to tag all PDFs in this batch"
-                    )
-                
-                with col2:
-                    pdf_author = st.text_input(
-                        "Author/Organization", 
-                        placeholder="Document author or organization", 
-                        key="pdf_author",
-                        help="Optional: Author or organization for all PDFs"
-                    )
-                    pdf_metadata = st.text_input(
-                        "Additional Metadata", 
-                        placeholder="e.g., project: AI research, version: 1.0", 
-                        key="pdf_metadata",
-                        help="Optional: Additional metadata as JSON string"
-                    )
-                
-                # Batch processing info
-                if uploaded_files:
-                    st.markdown(f"""
-                    <div class="alert alert-info" role="alert">
-                        <strong>📋 Batch Processing:</strong> {len(uploaded_files)} PDF files will be processed together with the same metadata.
-                        <br><small>Each PDF will be chunked and embedded into the knowledge base.</small>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown("""
-                    <div class="alert alert-warning" role="alert">
-                        <strong>📁 No Files Selected:</strong> Please upload PDF files above to enable batch processing.
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                pdf_submitted = st.form_submit_button(
-                    "🚀 Process PDF Batch" if uploaded_files else "📁 Upload Files First", 
-                    type="primary",
-                    disabled=not uploaded_files
+            
+            # Create columns for the form fields
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                pdf_source = st.text_input(
+                    "Source *", 
+                    placeholder="e.g., research papers, company docs, training materials", 
+                    key="pdf_source",
+                    help="Required: Source identifier for all PDFs in this batch"
                 )
-                
-                if pdf_submitted and uploaded_files:
+                pdf_categories = st.text_input(
+                    "Categories (comma-separated)", 
+                    placeholder="e.g., ai, research, tutorial, legal", 
+                    key="pdf_categories",
+                    help="Optional: Categories to tag all PDFs in this batch"
+                )
+            
+            with col2:
+                pdf_author = st.text_input(
+                    "Author/Organization", 
+                    placeholder="Document author or organization", 
+                    key="pdf_author",
+                    help="Optional: Author or organization for all PDFs"
+                )
+                pdf_metadata = st.text_input(
+                    "Additional Metadata", 
+                    placeholder="e.g., project: AI research, version: 1.0", 
+                    key="pdf_metadata",
+                    help="Optional: Additional metadata as JSON string"
+                )
+            
+            # Batch processing info
+            if uploaded_files:
+                st.markdown(f"""
+                <div class="alert alert-info" role="alert">
+                    <strong>📋 Batch Processing:</strong> {len(uploaded_files)} PDF files will be processed together with the same metadata.
+                    <br><small>Each PDF will be chunked and embedded into the knowledge base.</small>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div class="alert alert-warning" role="alert">
+                    <strong>📁 No Files Selected:</strong> Please upload PDF files above to enable batch processing.
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Process button (not in a form)
+            if st.button(
+                "🚀 Process PDF Batch" if uploaded_files else "📁 Upload Files First", 
+                type="primary",
+                disabled=not uploaded_files,
+                key="pdf_process_button"
+            ):
+                if uploaded_files:
                     if not pdf_source.strip():
                         st.error("❌ Please provide a source for the PDF files")
                     else:
