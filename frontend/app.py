@@ -429,7 +429,7 @@ def main():
         with col2:
             st.markdown("#### ✏️ Manual Document Input")
             
-            # Manual input form
+            # Manual input form (no columns inside form)
             with st.form("manual_ingest"):
                 content = st.text_area(
                     "Document Content",
@@ -437,12 +437,8 @@ def main():
                     height=200
                 )
                 
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    source = st.text_input("Source", placeholder="e.g., webpage, document, manual")
-                with col_b:
-                    categories = st.text_input("Categories (comma-separated)", placeholder="e.g., ai, research, tutorial")
-                
+                source = st.text_input("Source", placeholder="e.g., webpage, document, manual")
+                categories = st.text_input("Categories (comma-separated)", placeholder="e.g., ai, research, tutorial")
                 author = st.text_input("Author", placeholder="Your name or organization")
                 
                 submitted = st.form_submit_button("Ingest Document", type="primary")
