@@ -1032,6 +1032,7 @@ async def submit_feedback(
             
             # Create a new state with the existing conversation data plus feedback
             existing_state = current_state.values
+            logger.info(f"🔍 Creating feedback state with knowledge_type: {request.knowledge_type}")
             feedback_state = KnowledgeState(
                 query_type=existing_state.get("query_type", "query"),
                 user_input=existing_state.get("user_input"),
@@ -1046,6 +1047,7 @@ async def submit_feedback(
                 status=existing_state.get("status"),
                 logs=existing_state.get("logs", [])
             )
+            logger.info(f"🔍 Feedback state created with knowledge_type: {feedback_state.knowledge_type}")
             
             # Add feedback metadata
             if request.comment:
