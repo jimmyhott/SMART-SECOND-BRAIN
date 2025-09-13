@@ -115,6 +115,8 @@ if 'uploaded_files' not in st.session_state:
     st.session_state.uploaded_files = []
 if 'current_thread_id' not in st.session_state:
     st.session_state.current_thread_id = None
+if 'new_thread_clicked' not in st.session_state:
+    st.session_state.new_thread_clicked = False
 
 # API Functions
 def api_request(endpoint: str, method: str = "GET", data: Optional[Dict] = None, files: Optional[Dict] = None) -> Dict:
@@ -438,6 +440,7 @@ def main():
         with col_new_thread:
             if st.button("🔄 New Thread", help="Start a new conversation thread"):
                 st.session_state.current_thread_id = None
+                st.session_state.new_thread_clicked = True
                 st.rerun()
         
         # Chat input
@@ -456,9 +459,16 @@ def main():
             
             # Advanced options
             with st.expander("Advanced Options"):
+                # Clear thread ID if new thread was clicked
+                if st.session_state.get('new_thread_clicked', False):
+                    thread_id_value = ""
+                    st.session_state.new_thread_clicked = False
+                else:
+                    thread_id_value = st.session_state.current_thread_id or ""
+                
                 thread_id = st.text_input(
                     "Thread ID (optional)", 
-                    value=st.session_state.current_thread_id or "",
+                    value=thread_id_value,
                     placeholder="For conversation continuity",
                     help="Leave empty to start a new conversation or continue with current thread"
                 )
@@ -474,8 +484,13 @@ def main():
             
             # Get AI response
             with st.spinner("Thinking..."):
-                # Use provided thread_id or current thread_id
-                active_thread_id = thread_id.strip() if thread_id.strip() else st.session_state.current_thread_id
+                # Use provided thread_id or current thread_id (but only if not explicitly cleared)
+                if thread_id.strip():
+                    active_thread_id = thread_id.strip()
+                elif st.session_state.current_thread_id:
+                    active_thread_id = st.session_state.current_thread_id
+                else:
+                    active_thread_id = None  # Start new conversation
                 result = query_knowledge(user_input, active_thread_id)
                 
                 if result:
