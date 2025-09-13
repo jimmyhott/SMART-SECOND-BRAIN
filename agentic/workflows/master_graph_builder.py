@@ -40,6 +40,7 @@ from langchain_chroma import Chroma
 from langchain.prompts import ChatPromptTemplate
 import datetime
 from ..core.knowledge_state import KnowledgeState
+from ..core.conversation_memory import conversation_memory
 
 # Import centralized logging
 import sys
@@ -404,7 +405,8 @@ class MasterGraphBuilder:
             if not state.messages:
                 state.messages = []
                 
-            # Update conversation history
+            # Add current user input and assistant response to conversation history
+            # Note: Conversation memory is now managed by custom ConversationMemoryManager
             state.messages.append({"role": "user", "content": state.user_input})
             state.messages.append({"role": "assistant", "content": state.generated_answer})
             state.logs = (state.logs or []) + ["✅ Generated contextual answer with conversation history"]

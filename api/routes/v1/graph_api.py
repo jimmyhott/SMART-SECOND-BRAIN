@@ -55,6 +55,7 @@ sys.path.insert(0, str(project_root))
 # Core workflow components
 from agentic.workflows.master_graph_builder import MasterGraphBuilder
 from agentic.core.knowledge_state import KnowledgeState
+from agentic.core.conversation_memory import conversation_memory
 
 # Utilities and configuration
 from shared.utils.logging_config import setup_logging
@@ -552,12 +553,15 @@ async def query_knowledge_base(
         # Use provided thread ID or generate new one for conversation continuity
         thread_id = request.thread_id or f"query_{int(start_time.timestamp())}"
 
+        # Get conversation history from custom memory manager
+        conversation_history = conversation_memory.get_conversation_history(thread_id)
+        
         # Create knowledge state for the query workflow
         state = KnowledgeState(
             query_type="query",                            # Workflow type identifier
             user_input=request.query,                      # User's question
             categories=[],                                 # No categories for queries
-            messages=[{"role": "user", "content": request.query}]  # Conversation history
+            messages=conversation_history                  # Use custom conversation memory
         )
 
         # Ensure compiled graph is available
@@ -571,6 +575,11 @@ async def query_knowledge_base(
             state,
             config={"configurable": {"thread_id": thread_id}}
         )
+
+        # Save conversation to custom memory manager
+        conversation_memory.add_message(thread_id, "user", request.query)
+        if result.get("final_answer"):
+            conversation_memory.add_message(thread_id, "assistant", result["final_answer"])
 
         # Calculate execution time for performance monitoring
         execution_time = (datetime.utcnow() - start_time).total_seconds()

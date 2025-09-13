@@ -40,7 +40,7 @@ app = FastAPI(
 # =============================================================================
 
 # Add CORS (Cross-Origin Resource Sharing) middleware to allow frontend communication
-# This enables the NiceGUI frontend to make API calls from different origins
+# This enables the Streamlit frontend to make API calls from different origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_hosts,  # Configured origins from settings

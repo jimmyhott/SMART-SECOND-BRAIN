@@ -10,7 +10,7 @@ An intelligent knowledge management platform with AI-powered document processing
 - **Semantic Search**: Vector-based retrieval using ChromaDB for accurate document search
 - **Azure OpenAI Integration**: Full support for Azure OpenAI with automatic deployment detection
 - **Smart Query Processing**: RAG (Retrieval-Augmented Generation) for intelligent question answering
-- **Thread-based Conversations**: LangGraph checkpointing for multi-turn conversations
+- **Thread-based Conversations**: Redis-backed conversation memory for multi-turn conversations
 - **Modern Python**: Pathlib for cross-platform path handling, type hints, and async programming
 - **Comprehensive Testing**: Unit tests with mocked components and integration tests with real APIs
 - **Centralized Logging**: Project-level logging configuration with file and console output
@@ -20,10 +20,10 @@ An intelligent knowledge management platform with AI-powered document processing
 - Python 3.12+
 - Azure OpenAI Service (for AI features)
 - OpenAI API Key (for embeddings and LLM)
+- Redis 8+ (for conversation memory)
 
 **Optional:**
 - PostgreSQL 13+ (for future database features)
-- Redis 6+ (for future caching features)
 
 ## 🚀 Quick Start with Startup Scripts
 
@@ -49,7 +49,7 @@ The easiest way to get started is using our automated startup scripts that handl
 
 **Prerequisites for startup scripts:**
 ```bash
-pip install uvicorn fastapi nicegui requests psutil
+pip install uvicorn fastapi streamlit requests redis
 ```
 
 ### Manual Setup
@@ -89,7 +89,21 @@ If you prefer to start components manually or need to troubleshoot:
    AZURE_OPENAI_ENDPOINT_URL=https://your-resource.openai.azure.com/
    ```
 
-5. **Start the API**
+5. **Start Redis**
+   ```bash
+   # On macOS with Homebrew
+   brew install redis
+   brew services start redis
+   
+   # On Ubuntu/Debian
+   sudo apt install redis-server
+   sudo systemctl start redis
+   
+   # Verify Redis is running
+   redis-cli ping  # Should return PONG
+   ```
+
+6. **Start the API**
    ```bash
    # Using uvicorn directly
    uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
@@ -120,22 +134,23 @@ curl -X POST "http://localhost:8000/smart-second-brain/api/v1/graph/query" \
   -d '{"query": "What is machine learning?"}'
 ```
 
-### Frontend Setup (NiceGUI)
+### Frontend Setup (Streamlit)
 
-The frontend is built with NiceGUI, a Python-based web framework:
+The frontend is built with Streamlit, a modern Python web framework:
 
 ```bash
 cd frontend
 pip install -e .  # Install in development mode
-python app.py      # Start the frontend
+streamlit run app.py --server.port 5173 --server.address 0.0.0.0
 ```
 
 **Frontend Features:**
 - 🏥 **System Health Dashboard** - Real-time status of all components
-- 📄 **Document Ingestion** - Easy document upload and processing
-- 🔍 **Knowledge Query** - Natural language search interface
+- 📄 **Document Ingestion** - Easy PDF upload and processing
+- 🔍 **Knowledge Query** - Natural language search interface with conversation memory
+- 💬 **Thread-based Conversations** - Redis-backed conversation history
 - 📊 **Status Monitoring** - Live updates and component health
-- 🎨 **Modern UI** - Clean, responsive interface built with NiceGUI
+- 🎨 **Modern UI** - Clean, responsive interface built with Streamlit
 
 ## 🏗️ Project Structure
 
@@ -177,9 +192,10 @@ SMART-SECOND-BRAIN/
 │   └── utils/                     # Shared utility functions
 │       ├── logging_config.py      # Centralized logging configuration and setup
 │       └── pathlib_example.py     # Path manipulation utilities example
-├── frontend/                      # NiceGUI Frontend application
-│   ├── app.py                     # Main frontend application with health dashboard and forms
+├── frontend/                      # Streamlit Frontend application
+│   ├── app.py                     # Main frontend application with health dashboard and chat interface
 │   ├── pyproject.toml             # Frontend dependencies and configuration
+│   ├── second-brain.jpeg          # Application icon
 │   └── README.md                  # Frontend-specific documentation
 ├── tests/                         # Comprehensive test suite
 │   ├── __init__.py                # Test package initialization
@@ -204,16 +220,9 @@ SMART-SECOND-BRAIN/
 ├── stop_system.py                 # System shutdown script with graceful process termination
 ├── start.sh                       # Shell wrapper for easy system startup
 ├── stop.sh                        # Shell wrapper for easy system shutdown
-├── demo_document_retriever.py     # Standalone document retriever demonstration script
-├── test_openai_connection.py      # OpenAI API connection testing script
 ├── pyproject.toml                 # Project metadata, dependencies, and build configuration
 ├── .env.example                   # Environment variables template
 ├── .gitignore                     # Git ignore rules and patterns
-├── system_startup.log             # System startup and operation logs
-├── test_runner.log                # Test execution logs
-├── test_master_graph_builder.log  # Specific test logs
-├── coverage.xml                   # Test coverage XML report
-├── .coverage                      # Test coverage data
 └── README.md                      # This comprehensive project documentation
 ```
 
@@ -419,9 +428,11 @@ LOG_LEVEL=INFO
 # Optional: CORS Configuration
 ALLOWED_HOSTS=["*"]
 
+# Optional: Redis Configuration (defaults to localhost:6379)
+# REDIS_URL=redis://localhost:6379
+
 # Optional: Future Database Configuration
 # DATABASE_URL=postgresql://user:password@localhost/smart_second_brain
-# REDIS_URL=redis://localhost:6379
 ```
 
 ### Environment Variables Explanation
