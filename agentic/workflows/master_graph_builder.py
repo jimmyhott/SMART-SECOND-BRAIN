@@ -366,23 +366,26 @@ class MasterGraphBuilder:
                 [f"{m['role']}: {m['content']}" for m in (state.messages or [])]
             )
 
-            # --- Define RAG prompt template ---
+            # --- Define enhanced RAG prompt template with conversation context ---
             template = """
-            You are a helpful knowledge assistant.
+            You are a helpful knowledge assistant with access to conversation history.
 
-            Conversation so far:
+            CONVERSATION HISTORY:
             {conversation}
 
-            User question:
+            CURRENT USER QUESTION:
             {query}
 
-            Retrieved context:
+            RETRIEVED KNOWLEDGE BASE CONTEXT:
             {context}
 
-            Instructions:
-            - Base your answer primarily on the retrieved context.
-            - If the context is empty or insufficient, say "I don't know based on available knowledge."
-            - Keep the answer clear and concise.
+            INSTRUCTIONS:
+            - Use the conversation history to understand context and references
+            - Base your answer primarily on the retrieved knowledge base context
+            - If the knowledge base context is insufficient, say "I don't know based on available knowledge."
+            - Consider previous questions and answers to provide better context
+            - Keep the answer clear, concise, and contextually relevant
+            - If the user refers to something from earlier in the conversation, acknowledge it
             """
             prompt = ChatPromptTemplate.from_template(template)
             chain = prompt | self.llm
@@ -404,7 +407,7 @@ class MasterGraphBuilder:
             # Update conversation history
             state.messages.append({"role": "user", "content": state.user_input})
             state.messages.append({"role": "assistant", "content": state.generated_answer})
-            state.logs = (state.logs or []) + ["✅ Generated grounded answer"]
+            state.logs = (state.logs or []) + ["✅ Generated contextual answer with conversation history"]
 
         except Exception as e:
             state.generated_answer = None
@@ -600,7 +603,6 @@ class MasterGraphBuilder:
             if hasattr(state, 'query_type'):
                 if state.query_type == "ingest":
                     return "ingest"
-                    
                 elif state.query_type == "query":
                     return "query"
                 else:
