@@ -386,12 +386,14 @@ class FeedbackRequest(BaseModel):
         feedback: Required feedback type (approved, rejected, edited)
         edits: Optional edited text when feedback is "edited"
         comment: Optional additional comments or notes
+        knowledge_type: Optional knowledge classification for storage decisions
     """
     
     thread_id: str = Field(description="Thread ID to identify the conversation")
     feedback: str = Field(description="Feedback type: 'approved', 'rejected', or 'edited'")
     edits: Optional[str] = Field(None, description="Edited text when feedback is 'edited'")
     comment: Optional[str] = Field(None, description="Additional comments or notes")
+    knowledge_type: Optional[str] = Field(None, description="Knowledge type: 'conversational', 'reusable', or 'verified'")
 
     class Config:
         """Pydantic configuration for request validation and documentation."""
@@ -399,7 +401,8 @@ class FeedbackRequest(BaseModel):
             "example": {
                 "thread_id": "conversation_123",
                 "feedback": "approved",
-                "comment": "Great answer, very helpful!"
+                "comment": "Great answer, very helpful!",
+                "knowledge_type": "reusable"
             }
         }
 
@@ -988,6 +991,15 @@ async def submit_feedback(
                 detail="Edits must be provided when feedback type is 'edited'"
             )
         
+        # Validate knowledge type if provided
+        if request.knowledge_type:
+            valid_knowledge_types = ["conversational", "reusable", "verified"]
+            if request.knowledge_type not in valid_knowledge_types:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid knowledge type. Must be one of: {valid_knowledge_types}"
+                )
+        
         logger.info(f"📝 Processing feedback for thread {request.thread_id}: {request.feedback}")
         
         # Get the compiled graph
@@ -1030,6 +1042,7 @@ async def submit_feedback(
                 metadata=existing_state.get("metadata", {}),
                 human_feedback=request.feedback,
                 edits=request.edits,
+                knowledge_type=request.knowledge_type,
                 status=existing_state.get("status"),
                 logs=existing_state.get("logs", [])
             )
@@ -1059,13 +1072,19 @@ async def submit_feedback(
             updated_config = {"configurable": {"thread_id": request.thread_id}}
             compiled_graph.update_state(updated_config, final_state.dict())
             
-            # Determine action taken
+            # Determine action taken based on feedback and knowledge type
             if request.feedback == "approved":
-                action_taken = "Answer approved and stored in knowledge base"
+                if request.knowledge_type in ("reusable", "verified"):
+                    action_taken = f"Answer approved and stored as {request.knowledge_type} knowledge in vector database"
+                else:
+                    action_taken = "Answer approved and stored in conversation history"
             elif request.feedback == "rejected":
                 action_taken = "Answer rejected, not stored in knowledge base"
             elif request.feedback == "edited":
-                action_taken = "Answer edited and stored in knowledge base"
+                if request.knowledge_type in ("reusable", "verified"):
+                    action_taken = f"Answer edited and stored as {request.knowledge_type} knowledge in vector database"
+                else:
+                    action_taken = "Answer edited and stored in conversation history"
             else:
                 action_taken = "Feedback processed"
             

@@ -486,23 +486,22 @@ class MasterGraphBuilder:
 
     def validated_store_node(self, state: KnowledgeState):
         """
-        Conversation history is now managed by LangGraph checkpoint memory only.
+        Intelligent storage routing based on knowledge type and human feedback.
         
-        This node no longer stores AI responses in ChromaDB to maintain
-        thread isolation. ChromaDB is reserved only for actual documents.
-        Conversation history is automatically persisted per thread via
-        LangGraph's MemorySaver checkpointer.
+        This node implements smart storage decisions:
+        - Conversational content: Stored in checkpoint memory only
+        - Reusable/verified knowledge: Stored in both checkpoint and vector DB
         
         Args:
-            state: KnowledgeState object containing final_answer and feedback
+            state: KnowledgeState object containing final_answer, feedback, and knowledge_type
             
         Returns:
             KnowledgeState: Updated state with storage status
             
-        Note:
-            - AI responses are NOT stored in ChromaDB
-            - Conversation history is thread-isolated via LangGraph checkpoint memory
-            - ChromaDB is used only for actual document storage
+        Storage Logic:
+            - Default: Store in checkpoint memory (conversational)
+            - knowledge_type='reusable' or 'verified': Also store in vector DB
+            - Rejected content: Not stored anywhere
         """
         try:
             # Check for answer to validate
@@ -515,10 +514,53 @@ class MasterGraphBuilder:
                 state.logs = (state.logs or []) + [f"ℹ️ Skipping validation because feedback = {state.human_feedback}"]
                 return state
 
-            # Conversation history is automatically managed by LangGraph checkpoint memory
-            # No need to store AI responses in ChromaDB - they're thread-isolated
+            # Determine knowledge type (default to conversational)
+            knowledge_type = getattr(state, "knowledge_type", "conversational")
+            
+            # Always store in checkpoint memory for conversation continuity
             state.status = "validated"
             state.logs = (state.logs or []) + ["✅ Conversation history managed by LangGraph checkpoint memory (thread-isolated)"]
+            
+            # Check if content should also be stored in vector DB
+            if knowledge_type in ("reusable", "verified"):
+                try:
+                    # Create a document for vector storage
+                    from langchain.schema import Document
+                    
+                    # Prepare metadata for vector storage
+                    metadata = {
+                        "source": f"human_approved_{state.query_type}",
+                        "thread_id": getattr(state, "thread_id", "unknown"),
+                        "knowledge_type": knowledge_type,
+                        "human_feedback": state.human_feedback,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "user_input": state.user_input or "unknown_query"
+                    }
+                    
+                    # Add any existing metadata
+                    if state.metadata:
+                        metadata.update(state.metadata)
+                    
+                    # Create document for vector storage
+                    doc = Document(
+                        page_content=state.final_answer,
+                        metadata=metadata
+                    )
+                    
+                    # Store in vector database
+                    if self.vectorstore:
+                        self.vectorstore.add_documents([doc])
+                        state.logs = (state.logs or []) + [f"✅ {knowledge_type.title()} knowledge stored in vector database"]
+                        logger.info(f"📚 Stored {knowledge_type} knowledge in vector DB: {state.final_answer[:100]}...")
+                    else:
+                        state.logs = (state.logs or []) + ["⚠️ Vector store not available, skipping vector storage"]
+                        
+                except Exception as e:
+                    state.logs = (state.logs or []) + [f"❌ Failed to store in vector DB: {e}"]
+                    logger.error(f"Failed to store knowledge in vector DB: {e}")
+            else:
+                # Conversational content - checkpoint memory only
+                state.logs = (state.logs or []) + ["💬 Conversational content stored in checkpoint memory only"]
 
         except Exception as e:
             state.status = "error"

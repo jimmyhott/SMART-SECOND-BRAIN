@@ -357,6 +357,23 @@ class KnowledgeState(BaseModel):
     - Quality metrics and benchmarking
     - Process optimization and automation
     """
+    
+    knowledge_type: Optional[str] = Field(
+        None, description="Type of knowledge: 'conversational' | 'reusable' | 'verified'."
+    )
+    """
+    Classification of the knowledge content for storage decisions.
+    
+    This field determines how approved content should be stored:
+    - 'conversational': Chat history only (default)
+    - 'reusable': Can be stored in vector DB for future retrieval
+    - 'verified': High-quality knowledge that should be embedded and stored
+    
+    Used for:
+    - Storage routing decisions
+    - Knowledge base management
+    - Content lifecycle management
+    """
 
     # =============================================================================
     # MEMORY & CONTEXT
