@@ -444,6 +444,13 @@ def main():
                             </div>
                             """, unsafe_allow_html=True)
         
+        # New Thread button (outside form)
+        col_new_thread, col_spacer = st.columns([1, 4])
+        with col_new_thread:
+            if st.button("🔄 New Thread", help="Start a new conversation thread"):
+                st.session_state.current_thread_id = None
+                st.rerun()
+        
         # Chat input
         with st.form("chat_form"):
             col_input, col_button = st.columns([4, 1])
@@ -460,20 +467,12 @@ def main():
             
             # Advanced options
             with st.expander("Advanced Options"):
-                col1, col2 = st.columns([3, 1])
-                
-                with col1:
-                    thread_id = st.text_input(
-                        "Thread ID (optional)", 
-                        value=st.session_state.current_thread_id or "",
-                        placeholder="For conversation continuity",
-                        help="Leave empty to start a new conversation or continue with current thread"
-                    )
-                
-                with col2:
-                    if st.button("🔄 New Thread", help="Start a new conversation thread"):
-                        st.session_state.current_thread_id = None
-                        st.rerun()
+                thread_id = st.text_input(
+                    "Thread ID (optional)", 
+                    value=st.session_state.current_thread_id or "",
+                    placeholder="For conversation continuity",
+                    help="Leave empty to start a new conversation or continue with current thread"
+                )
         
         # Handle chat submission
         if send_button and user_input:
