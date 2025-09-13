@@ -374,6 +374,113 @@ class MultiIngestResponse(BaseModel):
         }
 
 
+class FeedbackRequest(BaseModel):
+    """
+    Request model for human feedback submission.
+    
+    This model defines the structure for submitting human feedback on AI-generated
+    answers, enabling human-in-the-loop validation and improvement.
+    
+    Attributes:
+        thread_id: Required thread ID to identify the conversation
+        feedback: Required feedback type (approved, rejected, edited)
+        edits: Optional edited text when feedback is "edited"
+        comment: Optional additional comments or notes
+    """
+    
+    thread_id: str = Field(description="Thread ID to identify the conversation")
+    feedback: str = Field(description="Feedback type: 'approved', 'rejected', or 'edited'")
+    edits: Optional[str] = Field(None, description="Edited text when feedback is 'edited'")
+    comment: Optional[str] = Field(None, description="Additional comments or notes")
+
+    class Config:
+        """Pydantic configuration for request validation and documentation."""
+        schema_extra = {
+            "example": {
+                "thread_id": "conversation_123",
+                "feedback": "approved",
+                "comment": "Great answer, very helpful!"
+            }
+        }
+
+
+class FeedbackResponse(BaseModel):
+    """
+    Response model for feedback submission.
+    
+    This model provides confirmation of feedback submission and any
+    resulting actions taken by the system.
+    
+    Attributes:
+        success: Whether the feedback was processed successfully
+        thread_id: Thread ID the feedback was submitted for
+        feedback: The feedback type that was submitted
+        action_taken: Description of what action was taken based on feedback
+        timestamp: When the feedback was processed
+        message: Additional information or status message
+    """
+    
+    success: bool = Field(description="Whether the feedback was processed successfully")
+    thread_id: str = Field(description="Thread ID the feedback was submitted for")
+    feedback: str = Field(description="The feedback type that was submitted")
+    action_taken: str = Field(description="Description of what action was taken based on feedback")
+    timestamp: datetime = Field(description="When the feedback was processed")
+    message: str = Field(description="Additional information or status message")
+
+    class Config:
+        """Pydantic configuration for response validation and documentation."""
+        schema_extra = {
+            "example": {
+                "success": True,
+                "thread_id": "conversation_123",
+                "feedback": "approved",
+                "action_taken": "Answer approved and stored in knowledge base",
+                "timestamp": "2024-01-15T10:30:00Z",
+                "message": "Feedback processed successfully"
+            }
+        }
+
+
+class FeedbackStatusResponse(BaseModel):
+    """
+    Response model for feedback status retrieval.
+    
+    This model provides information about the current feedback status
+    for a given thread, including pending reviews and feedback history.
+    
+    Attributes:
+        thread_id: Thread ID being queried
+        has_pending_feedback: Whether there's a pending answer awaiting feedback
+        current_answer: The current AI-generated answer awaiting review
+        feedback_history: List of previous feedback submissions
+        status: Current workflow status
+    """
+    
+    thread_id: str = Field(description="Thread ID being queried")
+    has_pending_feedback: bool = Field(description="Whether there's a pending answer awaiting feedback")
+    current_answer: Optional[str] = Field(None, description="The current AI-generated answer awaiting review")
+    feedback_history: List[Dict[str, Any]] = Field(default_factory=list, description="List of previous feedback submissions")
+    status: str = Field(description="Current workflow status")
+
+    class Config:
+        """Pydantic configuration for response validation and documentation."""
+        schema_extra = {
+            "example": {
+                "thread_id": "conversation_123",
+                "has_pending_feedback": True,
+                "current_answer": "Based on your documents, the main concepts are...",
+                "feedback_history": [
+                    {
+                        "feedback": "approved",
+                        "timestamp": "2024-01-15T10:30:00Z",
+                        "comment": "Great answer!"
+                    }
+                ],
+                "status": "awaiting_feedback"
+            }
+        }
+
+
 # =============================================================================
 # PDF PROCESSING UTILITIES
 # =============================================================================
@@ -839,3 +946,248 @@ async def ingest_multiple_pdfs(
         execution_time=execution_time,
         timestamp=datetime.utcnow()
     )
+
+
+@router.post("/feedback", response_model=FeedbackResponse)
+async def submit_feedback(
+    request: FeedbackRequest,
+    graph_builder: MasterGraphBuilder = Depends(get_graph_builder)
+):
+    """
+    Submit human feedback on AI-generated answers.
+    
+    This endpoint enables human-in-the-loop validation by allowing users to
+    provide feedback on AI-generated answers. The feedback can be approval,
+    rejection, or edits to improve the answer quality.
+    
+    Args:
+        request: FeedbackRequest containing thread_id, feedback type, and optional edits
+        graph_builder: MasterGraphBuilder dependency for workflow execution
+        
+    Returns:
+        FeedbackResponse: Confirmation of feedback submission and actions taken
+        
+    Raises:
+        HTTPException: If thread_id is invalid or feedback processing fails
+    """
+    start_time = datetime.utcnow()
+    
+    try:
+        # Validate feedback type
+        valid_feedback_types = ["approved", "rejected", "edited"]
+        if request.feedback not in valid_feedback_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid feedback type. Must be one of: {valid_feedback_types}"
+            )
+        
+        # Validate edits are provided when feedback is "edited"
+        if request.feedback == "edited" and not request.edits:
+            raise HTTPException(
+                status_code=400,
+                detail="Edits must be provided when feedback type is 'edited'"
+            )
+        
+        logger.info(f"📝 Processing feedback for thread {request.thread_id}: {request.feedback}")
+        
+        # Get the compiled graph
+        global compiled_graph
+        if compiled_graph is None:
+            compiled_graph = graph_builder.build()
+        
+        # Create a new state with the feedback
+        feedback_state = KnowledgeState(
+            query_type="query",  # We're processing feedback on a query
+            human_feedback=request.feedback,
+            edits=request.edits,
+            metadata={
+                "feedback_comment": request.comment,
+                "feedback_timestamp": start_time.isoformat(),
+                "feedback_source": "api"
+            }
+        )
+        
+        # Process feedback through the workflow using LangGraph checkpointing
+        try:
+            # Create a feedback state that will be processed through the workflow
+            feedback_state = KnowledgeState(
+                query_type="query",  # We're processing feedback on a query
+                human_feedback=request.feedback,
+                edits=request.edits,
+                metadata={
+                    "feedback_comment": request.comment,
+                    "feedback_timestamp": start_time.isoformat(),
+                    "feedback_source": "api"
+                }
+            )
+            
+            # Process the feedback through the workflow
+            # We'll invoke just the review and validation nodes
+            logger.info(f"🔄 Processing feedback through workflow")
+            
+            # Process through human review node
+            review_result = graph_builder.human_review_node(feedback_state)
+            
+            # If approved or edited, continue to validation
+            if review_result.human_feedback in ["approved", "edited"]:
+                validation_result = graph_builder.validated_store_node(review_result)
+                final_state = validation_result
+            else:
+                final_state = review_result
+            
+            # The state is automatically managed by LangGraph checkpointing
+            # No need to manually update conversation memory
+            
+            # Determine action taken
+            if request.feedback == "approved":
+                action_taken = "Answer approved and stored in knowledge base"
+            elif request.feedback == "rejected":
+                action_taken = "Answer rejected, not stored in knowledge base"
+            elif request.feedback == "edited":
+                action_taken = "Answer edited and stored in knowledge base"
+            else:
+                action_taken = "Feedback processed"
+            
+            execution_time = (datetime.utcnow() - start_time).total_seconds()
+            
+            logger.info(f"✅ Feedback processed successfully in {execution_time:.2f}s")
+            
+            return FeedbackResponse(
+                success=True,
+                thread_id=request.thread_id,
+                feedback=request.feedback,
+                action_taken=action_taken,
+                timestamp=datetime.utcnow(),
+                message="Feedback processed successfully"
+            )
+            
+        except Exception as e:
+            logger.error(f"❌ Error processing feedback: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to process feedback: {str(e)}"
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Unexpected error in feedback submission: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@router.get("/feedback/{thread_id}", response_model=FeedbackStatusResponse)
+async def get_feedback_status(
+    thread_id: str,
+    graph_builder: MasterGraphBuilder = Depends(get_graph_builder)
+):
+    """
+    Get the current feedback status for a conversation thread.
+    
+    This endpoint provides information about whether there's a pending answer
+    awaiting feedback and the history of feedback submissions for the thread.
+    
+    Args:
+        thread_id: Thread ID to check feedback status for
+        graph_builder: MasterGraphBuilder dependency (for consistency)
+        
+    Returns:
+        FeedbackStatusResponse: Current feedback status and history
+        
+    Raises:
+        HTTPException: If thread_id is invalid or status retrieval fails
+    """
+    try:
+        logger.info(f"🔍 Checking feedback status for thread: {thread_id}")
+        
+        # Get the compiled graph
+        global compiled_graph
+        if compiled_graph is None:
+            compiled_graph = graph_builder.build()
+        
+        # Try to get the current state from LangGraph checkpointing
+        try:
+            # Get the current state from the compiled graph's checkpointing system
+            current_state = compiled_graph.get_state({"configurable": {"thread_id": thread_id}})
+            
+            if not current_state or not current_state.values:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No conversation found for thread_id: {thread_id}"
+                )
+            
+            # Extract the KnowledgeState from the checkpoint
+            state_values = current_state.values
+            
+            # Check if there's a pending answer awaiting feedback
+            has_pending_feedback = (
+                state_values.get("generated_answer") is not None and 
+                state_values.get("human_feedback") is None
+            )
+            
+            # Get current answer if pending
+            current_answer = state_values.get("generated_answer") if has_pending_feedback else None
+            
+            # Build feedback history from conversation metadata
+            feedback_history = []
+            metadata = state_values.get("metadata", {})
+            if metadata and "feedback_history" in metadata:
+                feedback_history = metadata["feedback_history"]
+            
+            # Add current feedback if it exists
+            if state_values.get("human_feedback"):
+                current_feedback = {
+                    "feedback": state_values.get("human_feedback"),
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "comment": metadata.get("feedback_comment") if metadata else None
+                }
+                feedback_history.append(current_feedback)
+            
+            # Determine current status
+            if has_pending_feedback:
+                status = "awaiting_feedback"
+            elif state_values.get("human_feedback") == "approved":
+                status = "approved"
+            elif state_values.get("human_feedback") == "rejected":
+                status = "rejected"
+            elif state_values.get("human_feedback") == "edited":
+                status = "edited"
+            else:
+                status = "unknown"
+                
+        except Exception as e:
+            logger.warning(f"Could not retrieve state from LangGraph checkpointing: {e}")
+            # Fallback: check if there's any conversation history in Redis
+            conversation_history = conversation_memory.get_conversation_history(thread_id)
+            if not conversation_history:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No conversation found for thread_id: {thread_id}"
+                )
+            
+            # If we have conversation history but no checkpoint state, assume no pending feedback
+            has_pending_feedback = False
+            current_answer = None
+            feedback_history = []
+            status = "conversation_exists"
+        
+        logger.info(f"✅ Feedback status retrieved: {status}")
+        
+        return FeedbackStatusResponse(
+            thread_id=thread_id,
+            has_pending_feedback=has_pending_feedback,
+            current_answer=current_answer,
+            feedback_history=feedback_history,
+            status=status
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error retrieving feedback status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve feedback status: {str(e)}"
+        )
