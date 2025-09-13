@@ -1056,10 +1056,10 @@ async def submit_feedback(
                 feedback_state.metadata["feedback_timestamp"] = start_time.isoformat()
                 feedback_state.metadata["feedback_source"] = "api"
             
-            # If feedback is "edited", update the final_answer with the edits
+            # If feedback is "edited", update the edited_answer with the edits
             if request.feedback == "edited" and request.edits:
-                feedback_state.final_answer = request.edits
-                logger.info(f"🔍 Updated final_answer with edits: {request.edits[:100]}...")
+                feedback_state.edited_answer = request.edits
+                logger.info(f"🔍 Updated edited_answer with edits: {request.edits[:100]}...")
             
             # Process the feedback through the workflow
             logger.info(f"🔄 Processing feedback through workflow")
