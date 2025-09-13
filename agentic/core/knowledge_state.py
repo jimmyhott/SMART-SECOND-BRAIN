@@ -358,6 +358,21 @@ class KnowledgeState(BaseModel):
     - Process optimization and automation
     """
     
+    edited_answer: Optional[str] = Field(
+        None, description="The edited version of the answer provided by human feedback."
+    )
+    """
+    The edited version of the answer after human review.
+    
+    This field stores the final edited answer that will be used
+    as the final_answer when human feedback is "edited".
+    
+    Used for:
+    - Storing human-edited content for final answer
+    - Workflow processing of edited feedback
+    - Quality control and validation
+    """
+    
     knowledge_type: Optional[str] = Field(
         None, description="Type of knowledge: 'conversational' | 'reusable' | 'verified'."
     )
