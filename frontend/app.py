@@ -429,7 +429,7 @@ def main():
                             <br><small class="text-muted">
                                 {chat["timestamp"]}
                                 {f" • {chat.get('execution_time', 0):.2f}s" if chat.get('execution_time') else ""}
-                                {f" • Thread: {chat.get('thread_id', 'unknown')[:12]}..." if chat.get('thread_id') else ""}
+                                {f" • Thread: {chat.get('thread_id', 'unknown')}" if chat.get('thread_id') else ""}
                             </small>
                         </div>
                     </div>
