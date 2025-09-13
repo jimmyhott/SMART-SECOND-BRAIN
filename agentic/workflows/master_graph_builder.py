@@ -504,14 +504,18 @@ class MasterGraphBuilder:
             - Rejected content: Not stored anywhere
         """
         logger.info(f"🔍 validated_store_node called with knowledge_type: {getattr(state, 'knowledge_type', 'None')}")
+        logger.info(f"🔍 final_answer: {getattr(state, 'final_answer', 'None')}")
+        logger.info(f"🔍 human_feedback: {getattr(state, 'human_feedback', 'None')}")
         try:
             # Check for answer to validate
             if not state.final_answer:
+                logger.info("⚠️ No final_answer to validate, skipping")
                 state.logs = (state.logs or []) + ["⚠️ No final_answer to validate, skipping"]
                 return state
 
             # Check feedback status
             if state.human_feedback not in ("approved", "edited"):
+                logger.info(f"ℹ️ Skipping validation because feedback = {state.human_feedback}")
                 state.logs = (state.logs or []) + [f"ℹ️ Skipping validation because feedback = {state.human_feedback}"]
                 return state
 
