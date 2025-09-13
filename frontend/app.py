@@ -154,36 +154,6 @@ def check_system_health():
         st.session_state.system_health["health"] = "error"
         st.session_state.system_health["last_check"] = datetime.now().strftime("%H:%M:%S")
 
-def ingest_document(content: str, source: str = "", categories: str = "", author: str = ""):
-    """Ingest a document into the knowledge base"""
-    if not content.strip():
-        st.error("Please enter document content")
-        return False
-    
-    try:
-        data = {
-            "document": content.strip(),
-            "source": source or "manual_input",
-            "categories": [cat.strip() for cat in categories.split(",") if cat.strip()] if categories else [],
-            "metadata": {
-                "author": author or "User",
-                "date": datetime.now().isoformat(),
-                "frontend": "streamlit"
-            }
-        }
-        
-        result = api_request(API_ENDPOINTS["ingest"], "POST", data)
-        
-        if "error" not in result:
-            st.success("Document ingested successfully!")
-            return True
-        else:
-            st.error(f"Error ingesting document: {result['error']}")
-            return False
-            
-    except Exception as e:
-        st.error(f"Error: {str(e)}")
-        return False
 
 def ingest_multiple_pdfs(uploaded_files: List, source: str, categories: str = "", author: str = "", metadata: str = ""):
     """Ingest multiple PDF files into the knowledge base"""
@@ -323,130 +293,104 @@ def main():
     with tab1:
         st.markdown("### Upload and Process Documents")
         
-        col1, col2 = st.columns([1, 1])
+        st.markdown("#### 📁 Upload PDF Files")
+        
+        # File uploader
+        uploaded_files = st.file_uploader(
+            "Choose PDF files",
+            type=['pdf'],
+            accept_multiple_files=True,
+            help="Upload multiple PDF files to process"
+        )
+        
+        if uploaded_files:
+            st.session_state.uploaded_files = uploaded_files
+            
+            # Display uploaded files
+            st.markdown("**Uploaded Files:**")
+            for i, file in enumerate(uploaded_files):
+                with st.container():
+                    st.markdown(f"""
+                    <div class="file-item">
+                        <div>
+                            <strong>{file.name}</strong><br>
+                            <small class="text-muted">{file.size} bytes</small>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        # PDF metadata form (always visible)
+        st.markdown("**PDF Batch Metadata:**")
+        
+        # Create columns for the form fields
+        col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("#### 📁 Upload PDF Files")
-            
-            # File uploader
-            uploaded_files = st.file_uploader(
-                "Choose PDF files",
-                type=['pdf'],
-                accept_multiple_files=True,
-                help="Upload multiple PDF files to process"
+            pdf_source = st.text_input(
+                "Source *", 
+                placeholder="e.g., research papers, company docs, training materials", 
+                key="pdf_source",
+                help="Required: Source identifier for all PDFs in this batch"
             )
-            
-            if uploaded_files:
-                st.session_state.uploaded_files = uploaded_files
-                
-                # Display uploaded files
-                st.markdown("**Uploaded Files:**")
-                for i, file in enumerate(uploaded_files):
-                    with st.container():
-                        st.markdown(f"""
-                        <div class="file-item">
-                            <div>
-                                <strong>{file.name}</strong><br>
-                                <small class="text-muted">{file.size} bytes</small>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-            
-            # PDF metadata form (always visible)
-            st.markdown("**PDF Batch Metadata:**")
-            
-            # Create columns for the form fields
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                pdf_source = st.text_input(
-                    "Source *", 
-                    placeholder="e.g., research papers, company docs, training materials", 
-                    key="pdf_source",
-                    help="Required: Source identifier for all PDFs in this batch"
-                )
-                pdf_categories = st.text_input(
-                    "Categories (comma-separated)", 
-                    placeholder="e.g., ai, research, tutorial, legal", 
-                    key="pdf_categories",
-                    help="Optional: Categories to tag all PDFs in this batch"
-                )
-            
-            with col2:
-                pdf_author = st.text_input(
-                    "Author/Organization", 
-                    placeholder="Document author or organization", 
-                    key="pdf_author",
-                    help="Optional: Author or organization for all PDFs"
-                )
-                pdf_metadata = st.text_input(
-                    "Additional Metadata", 
-                    placeholder="e.g., project: AI research, version: 1.0", 
-                    key="pdf_metadata",
-                    help="Optional: Additional metadata as JSON string"
-                )
-            
-            # Batch processing info
-            if uploaded_files:
-                st.markdown(f"""
-                <div class="alert alert-info" role="alert">
-                    <strong>📋 Batch Processing:</strong> {len(uploaded_files)} PDF files will be processed together with the same metadata.
-                    <br><small>Each PDF will be chunked and embedded into the knowledge base.</small>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown("""
-                <div class="alert alert-warning" role="alert">
-                    <strong>📁 No Files Selected:</strong> Please upload PDF files above to enable batch processing.
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # Process button (not in a form)
-            if st.button(
-                "🚀 Process PDF Batch" if uploaded_files else "📁 Upload Files First", 
-                type="primary",
-                disabled=not uploaded_files,
-                key="pdf_process_button"
-            ):
-                if uploaded_files:
-                    if not pdf_source.strip():
-                        st.error("❌ Please provide a source for the PDF files")
-                    else:
-                        with st.spinner("🔄 Processing PDF files..."):
-                            success = ingest_multiple_pdfs(
-                                uploaded_files, 
-                                pdf_source, 
-                                pdf_categories, 
-                                pdf_author, 
-                                pdf_metadata
-                            )
-                            
-                            if success:
-                                # Clear the uploaded files after successful processing
-                                st.session_state.uploaded_files = []
-                                st.rerun()
+            pdf_categories = st.text_input(
+                "Categories (comma-separated)", 
+                placeholder="e.g., ai, research, tutorial, legal", 
+                key="pdf_categories",
+                help="Optional: Categories to tag all PDFs in this batch"
+            )
         
         with col2:
-            st.markdown("#### ✏️ Manual Document Input")
-            
-            # Manual input form (no columns inside form)
-            with st.form("manual_ingest"):
-                content = st.text_area(
-                    "Document Content",
-                    placeholder="Paste or type your document content here...",
-                    height=200
-                )
-                
-                source = st.text_input("Source", placeholder="e.g., webpage, document, manual")
-                categories = st.text_input("Categories (comma-separated)", placeholder="e.g., ai, research, tutorial")
-                author = st.text_input("Author", placeholder="Your name or organization")
-                
-                submitted = st.form_submit_button("Ingest Document", type="primary")
-                
-                if submitted:
-                    with st.spinner("Processing document..."):
-                        success = ingest_document(content, source, categories, author)
+            pdf_author = st.text_input(
+                "Author/Organization", 
+                placeholder="Document author or organization", 
+                key="pdf_author",
+                help="Optional: Author or organization for all PDFs"
+            )
+            pdf_metadata = st.text_input(
+                "Additional Metadata", 
+                placeholder="e.g., project: AI research, version: 1.0", 
+                key="pdf_metadata",
+                help="Optional: Additional metadata as JSON string"
+            )
+        
+        # Batch processing info
+        if uploaded_files:
+            st.markdown(f"""
+            <div class="alert alert-info" role="alert">
+                <strong>📋 Batch Processing:</strong> {len(uploaded_files)} PDF files will be processed together with the same metadata.
+                <br><small>Each PDF will be chunked and embedded into the knowledge base.</small>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div class="alert alert-warning" role="alert">
+                <strong>📁 No Files Selected:</strong> Please upload PDF files above to enable batch processing.
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Process button (not in a form)
+        if st.button(
+            "🚀 Process PDF Batch" if uploaded_files else "📁 Upload Files First", 
+            type="primary",
+            disabled=not uploaded_files,
+            key="pdf_process_button"
+        ):
+            if uploaded_files:
+                if not pdf_source.strip():
+                    st.error("❌ Please provide a source for the PDF files")
+                else:
+                    with st.spinner("🔄 Processing PDF files..."):
+                        success = ingest_multiple_pdfs(
+                            uploaded_files, 
+                            pdf_source, 
+                            pdf_categories, 
+                            pdf_author, 
+                            pdf_metadata
+                        )
+                        
                         if success:
+                            # Clear the uploaded files after successful processing
+                            st.session_state.uploaded_files = []
                             st.rerun()
     
     with tab2:
