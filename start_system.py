@@ -51,10 +51,10 @@ class SystemManager:
                 }
             },
             'frontend': {
-                'name': 'Frontend (NiceGUI)',
+                'name': 'Frontend (Streamlit)',
                 'port': 5173,
                 'health_url': 'http://localhost:5173',
-                'command': [sys.executable, 'app.py'],
+                'command': [sys.executable, '-m', 'streamlit', 'run', 'app.py', '--server.port', '5173', '--server.address', '0.0.0.0'],
                 'cwd': str(self.root_dir / 'frontend'),
                 'env': os.environ.copy()
             }
@@ -253,7 +253,7 @@ class SystemManager:
             monitor_thread.start()
             
             logger.info("🎯 System is running! Press Ctrl+C to stop all components.")
-            logger.info("📱 Frontend: http://localhost:5173")
+            logger.info("📱 Frontend (Streamlit): http://localhost:5173")
             logger.info("🔌 Backend API: http://localhost:8000")
             logger.info("📚 API Docs: http://localhost:8000/docs")
             
@@ -286,7 +286,7 @@ def main():
         sys.exit(1)
     
     # Check required packages
-    required_packages = ['uvicorn', 'fastapi', 'nicegui']
+    required_packages = ['uvicorn', 'fastapi', 'streamlit']
     missing_packages = []
     
     for package in required_packages:
