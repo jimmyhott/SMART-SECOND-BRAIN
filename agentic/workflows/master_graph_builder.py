@@ -549,11 +549,15 @@ class MasterGraphBuilder:
                     
                     # Store in vector database
                     if self.vectorstore:
+                        logger.info(f"📚 Attempting to store {knowledge_type} knowledge in vector DB...")
+                        logger.info(f"📚 Document content: {doc.page_content[:100]}...")
+                        logger.info(f"📚 Document metadata: {doc.metadata}")
                         self.vectorstore.add_documents([doc])
                         state.logs = (state.logs or []) + [f"✅ {knowledge_type.title()} knowledge stored in vector database"]
-                        logger.info(f"📚 Stored {knowledge_type} knowledge in vector DB: {state.final_answer[:100]}...")
+                        logger.info(f"📚 Successfully stored {knowledge_type} knowledge in vector DB")
                     else:
                         state.logs = (state.logs or []) + ["⚠️ Vector store not available, skipping vector storage"]
+                        logger.warning("⚠️ Vector store not available, skipping vector storage")
                         
                 except Exception as e:
                     state.logs = (state.logs or []) + [f"❌ Failed to store in vector DB: {e}"]
