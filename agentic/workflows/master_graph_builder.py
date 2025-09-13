@@ -600,6 +600,7 @@ class MasterGraphBuilder:
             if hasattr(state, 'query_type'):
                 if state.query_type == "ingest":
                     return "ingest"
+                    
                 elif state.query_type == "query":
                     return "query"
                 else:
