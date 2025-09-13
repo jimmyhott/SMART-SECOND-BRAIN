@@ -484,11 +484,12 @@ class MasterGraphBuilder:
 
     def validated_store_node(self, state: KnowledgeState):
         """
-        Store human-validated answers back into the knowledge base.
+        Conversation history is now managed by LangGraph checkpoint memory only.
         
-        This node persists approved or edited answers as new knowledge
-        in the vector database, creating a feedback loop that improves
-        the system over time. Only stores answers that have been validated.
+        This node no longer stores AI responses in ChromaDB to maintain
+        thread isolation. ChromaDB is reserved only for actual documents.
+        Conversation history is automatically persisted per thread via
+        LangGraph's MemorySaver checkpointer.
         
         Args:
             state: KnowledgeState object containing final_answer and feedback
@@ -496,54 +497,30 @@ class MasterGraphBuilder:
         Returns:
             KnowledgeState: Updated state with storage status
             
-        Storage Criteria:
-            - Human feedback must be "approved" or "edited"
-            - final_answer must exist
-            - Vectorstore must be available
-            
-        Processing:
-            - Validates storage prerequisites
-            - Adds comprehensive metadata for traceability
-            - Stores answer with source and feedback information
-            - Updates workflow status
-            - Logs storage operations and errors
+        Note:
+            - AI responses are NOT stored in ChromaDB
+            - Conversation history is thread-isolated via LangGraph checkpoint memory
+            - ChromaDB is used only for actual document storage
         """
         try:
-            # Check vectorstore availability
-            if not self.vectorstore:
-                state.logs = (state.logs or []) + ["⚠️ No vectorstore available, skipping validated store"]
-                return state
-
-            # Check for answer to store
+            # Check for answer to validate
             if not state.final_answer:
-                state.logs = (state.logs or []) + ["⚠️ No final_answer to store, skipping"]
+                state.logs = (state.logs or []) + ["⚠️ No final_answer to validate, skipping"]
                 return state
 
             # Check feedback status
             if state.human_feedback not in ("approved", "edited"):
-                state.logs = (state.logs or []) + [f"ℹ️ Skipping store because feedback = {state.human_feedback}"]
+                state.logs = (state.logs or []) + [f"ℹ️ Skipping validation because feedback = {state.human_feedback}"]
                 return state
 
-            # Prepare comprehensive metadata for traceability
-            metadata = {
-                "source": "assistant_validated",
-                "categories": ", ".join(state.categories) if state.categories else "general",
-                "feedback": state.human_feedback,
-                "timestamp": datetime.datetime.utcnow().isoformat()
-            }
-
-            # Store validated answer in vector database
-            self.vectorstore.add_texts(
-                texts=[state.final_answer],
-                metadatas=[metadata]
-            )
-
+            # Conversation history is automatically managed by LangGraph checkpoint memory
+            # No need to store AI responses in ChromaDB - they're thread-isolated
             state.status = "validated"
-            state.logs = (state.logs or []) + ["✅ Stored validated answer in Chroma"]
+            state.logs = (state.logs or []) + ["✅ Conversation history managed by LangGraph checkpoint memory (thread-isolated)"]
 
         except Exception as e:
             state.status = "error"
-            state.logs = (state.logs or []) + [f"❌ Validated store failed: {e}"]
+            state.logs = (state.logs or []) + [f"❌ Validation failed: {e}"]
 
         return state
 
