@@ -1009,20 +1009,39 @@ async def submit_feedback(
         
         # Process feedback through the workflow using LangGraph checkpointing
         try:
-            # Create a feedback state that will be processed through the workflow
+            # Get the current state from LangGraph checkpointing
+            current_state = compiled_graph.get_state({"configurable": {"thread_id": request.thread_id}})
+            
+            if not current_state or not current_state.values:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No conversation found for thread_id: {request.thread_id}"
+                )
+            
+            # Create a new state with the existing conversation data plus feedback
+            existing_state = current_state.values
             feedback_state = KnowledgeState(
-                query_type="query",  # We're processing feedback on a query
+                query_type=existing_state.get("query_type", "query"),
+                user_input=existing_state.get("user_input"),
+                messages=existing_state.get("messages", []),
+                generated_answer=existing_state.get("generated_answer"),
+                retrieved_docs=existing_state.get("retrieved_docs"),
+                retrieved_chunks=existing_state.get("retrieved_chunks"),
+                metadata=existing_state.get("metadata", {}),
                 human_feedback=request.feedback,
                 edits=request.edits,
-                metadata={
-                    "feedback_comment": request.comment,
-                    "feedback_timestamp": start_time.isoformat(),
-                    "feedback_source": "api"
-                }
+                status=existing_state.get("status"),
+                logs=existing_state.get("logs", [])
             )
             
+            # Add feedback metadata
+            if request.comment:
+                feedback_state.metadata = feedback_state.metadata or {}
+                feedback_state.metadata["feedback_comment"] = request.comment
+                feedback_state.metadata["feedback_timestamp"] = start_time.isoformat()
+                feedback_state.metadata["feedback_source"] = "api"
+            
             # Process the feedback through the workflow
-            # We'll invoke just the review and validation nodes
             logger.info(f"🔄 Processing feedback through workflow")
             
             # Process through human review node
@@ -1035,8 +1054,10 @@ async def submit_feedback(
             else:
                 final_state = review_result
             
-            # The state is automatically managed by LangGraph checkpointing
-            # No need to manually update conversation memory
+            # Update the conversation state in LangGraph checkpointing
+            # We need to invoke the graph with the updated state to persist it
+            updated_config = {"configurable": {"thread_id": request.thread_id}}
+            compiled_graph.update_state(updated_config, final_state.dict())
             
             # Determine action taken
             if request.feedback == "approved":
