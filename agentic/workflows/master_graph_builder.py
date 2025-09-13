@@ -503,6 +503,7 @@ class MasterGraphBuilder:
             - knowledge_type='reusable' or 'verified': Also store in vector DB
             - Rejected content: Not stored anywhere
         """
+        logger.info(f"🔍 validated_store_node called with knowledge_type: {getattr(state, 'knowledge_type', 'None')}")
         try:
             # Check for answer to validate
             if not state.final_answer:
