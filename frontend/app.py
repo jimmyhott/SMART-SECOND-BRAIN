@@ -113,6 +113,8 @@ if 'system_health' not in st.session_state:
     }
 if 'uploaded_files' not in st.session_state:
     st.session_state.uploaded_files = []
+if 'current_thread_id' not in st.session_state:
+    st.session_state.current_thread_id = None
 
 # API Functions
 def api_request(endpoint: str, method: str = "GET", data: Optional[Dict] = None, files: Optional[Dict] = None) -> Dict:
@@ -396,6 +398,12 @@ def main():
     with tab2:
         st.markdown("### Chat with Your Knowledge Base")
         
+        # Thread ID display
+        if st.session_state.current_thread_id:
+            st.info(f"🔄 **Current Conversation Thread:** `{st.session_state.current_thread_id}`")
+        else:
+            st.info("💬 **New Conversation** - A thread ID will be created when you send your first message")
+        
         # Chat container
         chat_container = st.container()
         
@@ -420,6 +428,7 @@ def main():
                                 {chat["timestamp"]}
                                 {f" • {chat.get('execution_time', 0):.2f}s" if chat.get('execution_time') else ""}
                                 {f" • {len(chat.get('retrieved_docs', []))} docs" if chat.get('retrieved_docs') else ""}
+                                {f" • Thread: {chat.get('thread_id', 'unknown')[:12]}..." if chat.get('thread_id') else ""}
                             </small>
                         </div>
                     </div>
@@ -451,7 +460,20 @@ def main():
             
             # Advanced options
             with st.expander("Advanced Options"):
-                thread_id = st.text_input("Thread ID (optional)", placeholder="For conversation continuity")
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    thread_id = st.text_input(
+                        "Thread ID (optional)", 
+                        value=st.session_state.current_thread_id or "",
+                        placeholder="For conversation continuity",
+                        help="Leave empty to start a new conversation or continue with current thread"
+                    )
+                
+                with col2:
+                    if st.button("🔄 New Thread", help="Start a new conversation thread"):
+                        st.session_state.current_thread_id = None
+                        st.rerun()
         
         # Handle chat submission
         if send_button and user_input:
@@ -464,16 +486,23 @@ def main():
             
             # Get AI response
             with st.spinner("Thinking..."):
-                result = query_knowledge(user_input, thread_id)
+                # Use provided thread_id or current thread_id
+                active_thread_id = thread_id.strip() if thread_id.strip() else st.session_state.current_thread_id
+                result = query_knowledge(user_input, active_thread_id)
                 
                 if result:
+                    # Store the thread ID from the response
+                    if result.get("thread_id"):
+                        st.session_state.current_thread_id = result["thread_id"]
+                    
                     # Add assistant response to history
                     st.session_state.chat_history.append({
                         "type": "assistant",
                         "content": result["answer"],
                         "timestamp": datetime.now().strftime("%H:%M:%S"),
                         "execution_time": result["execution_time"],
-                        "retrieved_docs": result["retrieved_docs"]
+                        "retrieved_docs": result["retrieved_docs"],
+                        "thread_id": result.get("thread_id", "unknown")
                     })
                 else:
                     # Add error message
@@ -489,6 +518,7 @@ def main():
         # Clear chat button
         if st.button("Clear Chat History"):
             st.session_state.chat_history = []
+            st.session_state.current_thread_id = None
             st.rerun()
 
 if __name__ == "__main__":
