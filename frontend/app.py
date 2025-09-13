@@ -427,22 +427,11 @@ def main():
                             <br><small class="text-muted">
                                 {chat["timestamp"]}
                                 {f" • {chat.get('execution_time', 0):.2f}s" if chat.get('execution_time') else ""}
-                                {f" • {len(chat.get('retrieved_docs', []))} docs" if chat.get('retrieved_docs') else ""}
                                 {f" • Thread: {chat.get('thread_id', 'unknown')[:12]}..." if chat.get('thread_id') else ""}
                             </small>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
-                    
-                    # Show retrieved documents
-                    if chat.get("retrieved_docs") and not chat.get("error", False):
-                        for j, doc in enumerate(chat["retrieved_docs"][:2]):
-                            st.markdown(f"""
-                            <div class="ms-4 mb-2 p-2 bg-light border-start border-primary border-3 rounded">
-                                <small class="text-muted fw-bold">Source {j+1}: {doc.get('metadata', {}).get('source', 'unknown')}</small>
-                                <p class="mb-0 small">{doc.get('content', '')[:150]}{'...' if len(doc.get('content', '')) > 150 else ''}</p>
-                            </div>
-                            """, unsafe_allow_html=True)
         
         # New Thread button (outside form)
         col_new_thread, col_spacer = st.columns([1, 4])
