@@ -538,7 +538,7 @@ class MasterGraphBuilder:
                         "thread_id": getattr(state, "thread_id", "unknown"),
                         "knowledge_type": knowledge_type,
                         "human_feedback": state.human_feedback,
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.datetime.now().isoformat(),
                         "user_input": state.user_input or "unknown_query"
                     }
                     
