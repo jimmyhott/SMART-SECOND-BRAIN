@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 import logging
 
 # Import centralized logging
-from ..utils.logging_config import setup_agentic_logging
+from shared.utils.logging_config import setup_agentic_logging
 
 # Set up logging
 logger = setup_agentic_logging()
@@ -67,17 +67,26 @@ class RedisCheckpointer:
         config_str = json.dumps(config, sort_keys=True)
         return f"checkpoint:{thread_id}:{hash(config_str)}"
     
-    def put(self, config: Dict, checkpoint: Dict, metadata: Dict) -> None:
+    def put(self, *args, **kwargs) -> None:
         """
         Store a checkpoint in Redis.
         
         Args:
-            config: Configuration dictionary
-            thread_id: Thread identifier
-            checkpoint: Checkpoint data
-            metadata: Checkpoint metadata
+            Flexible signature; extracts config, checkpoint, metadata from args/kwargs.
         """
         try:
+            # Extract parameters from kwargs or args
+            config = kwargs.get("config") if "config" in kwargs else (args[0] if len(args) > 0 else {})
+            checkpoint = kwargs.get("checkpoint") if "checkpoint" in kwargs else (args[1] if len(args) > 1 else {})
+            metadata = kwargs.get("metadata") if "metadata" in kwargs else (args[2] if len(args) > 2 else {})
+
+            if not isinstance(config, dict):
+                config = {}
+            if not isinstance(checkpoint, dict):
+                checkpoint = {"value": checkpoint}
+            if not isinstance(metadata, dict):
+                metadata = {"value": metadata}
+
             thread_id = config.get("configurable", {}).get("thread_id")
             if not thread_id:
                 logger.warning("No thread_id in config, skipping checkpoint storage")
@@ -149,6 +158,44 @@ class RedisCheckpointer:
             logger.error(f"Unexpected error retrieving checkpoint: {e}")
             return None
     
+    def get_next_version(self, *args, **kwargs) -> str:
+        """
+        Generate and return the next version identifier for a given config.
+
+        LangGraph expects checkpointers to provide versioning so that new
+        checkpoints for the same thread/config can be uniquely identified.
+
+        Returns:
+            A monotonically increasing string version identifier scoped to the thread.
+        """
+        try:
+            # Support multiple calling conventions: (config), (config, _), (config=config)
+            if "config" in kwargs:
+                config = kwargs["config"]
+            elif len(args) >= 1 and isinstance(args[0], dict):
+                config = args[0]
+            else:
+                config = {}
+            thread_id = config.get("configurable", {}).get("thread_id")
+            if not thread_id:
+                # Fallback to a global version counter if thread_id is missing
+                version_key = "checkpoint:global:version"
+            else:
+                version_key = f"checkpoint:{thread_id}:version"
+
+            # Use Redis atomic INCR to get the next version number
+            next_version_int = self.redis_client.incr(version_key)
+            # Set an expiry on the version key to align with TTL policy
+            self.redis_client.expire(version_key, self.ttl_seconds)
+            return str(next_version_int)
+        except redis.RedisError as e:
+            logger.error(f"Redis error generating next version: {e}")
+            # Fallback to timestamp-based version
+            return datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+        except Exception as e:
+            logger.error(f"Unexpected error generating next version: {e}")
+            return datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+
     def list(self, config: Dict, before: Optional[str] = None, limit: Optional[int] = None) -> Iterator[Tuple[Dict, Dict, Dict]]:
         """
         List checkpoints for a thread.
@@ -239,6 +286,48 @@ class RedisCheckpointer:
             logger.error(f"Unexpected error getting latest checkpoint: {e}")
             return None
     
+    def put_writes(self, config: Dict, writes: Any, metadata: Dict) -> None:
+        """
+        Store multiple writes (batch) for a given config.
+
+        Some LangGraph executors call `put_writes` to persist a set of
+        incremental updates as an atomic operation. We serialize and store
+        the batch in a single Redis entry keyed by version.
+
+        Args:
+            config: Configuration dictionary
+            writes: Arbitrary write payload provided by the executor
+            metadata: Associated metadata for this batch
+        """
+        try:
+            thread_id = config.get("configurable", {}).get("thread_id")
+            if not thread_id:
+                logger.warning("No thread_id in config, skipping put_writes")
+                return
+
+            version = self.get_next_version(config)
+            key = f"checkpoint:{thread_id}:writes:{version}"
+
+            payload = {
+                "config": config,
+                "writes": writes,
+                "metadata": metadata,
+                "timestamp": datetime.utcnow().isoformat(),
+                "version": version,
+            }
+
+            self.redis_client.setex(key, self.ttl_seconds, json.dumps(payload))
+
+            # Update latest pointer
+            latest_key = self._get_thread_key(thread_id)
+            self.redis_client.setex(latest_key, self.ttl_seconds, key)
+
+            logger.debug(f"💾 Stored put_writes batch for thread {thread_id} v{version}")
+        except redis.RedisError as e:
+            logger.error(f"Redis error in put_writes: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error in put_writes: {e}")
+
     def delete(self, config: Dict) -> None:
         """
         Delete a checkpoint from Redis.
