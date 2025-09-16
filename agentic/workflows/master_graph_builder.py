@@ -34,7 +34,9 @@ Version: 0.1.0
 
 from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
-from ..core.redis_checkpointer import redis_checkpointer
+from langgraph.checkpoint.sqlite import SqliteSaver
+import sqlite3
+import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from langchain.prompts import ChatPromptTemplate
@@ -102,8 +104,11 @@ class MasterGraphBuilder:
         self.vectorstore = vectorstore
         self.chromadb_dir = chromadb_dir or "./chroma_db"
         
-        # Initialize Redis-based checkpointing for persistent conversation continuity
-        self.checkpointer = redis_checkpointer
+        # Initialize SqliteSaver checkpointer (no external service required)
+        # Stores checkpoints in ./data/checkpoints.sqlite
+        os.makedirs("data", exist_ok=True)
+        sqlite_conn = sqlite3.connect("data/checkpoints.sqlite", check_same_thread=False)
+        self.checkpointer = SqliteSaver(sqlite_conn)
 
     # =============================================================================
     # WORKFLOW NODE METHODS
