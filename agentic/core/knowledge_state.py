@@ -372,6 +372,16 @@ class KnowledgeState(BaseModel):
     - Workflow processing of edited feedback
     - Quality control and validation
     """
+
+    # Control whether to pause for human review
+    require_human_review: Optional[bool] = Field(
+        None,
+        description=(
+            "If True, the workflow will interrupt and wait for human feedback at the "
+            "review step. If False, it will auto-approve when no feedback is present. "
+            "If None, the system infers based on knowledge_type (reusable/verified -> True)."
+        ),
+    )
     
     knowledge_type: Optional[str] = Field(
         None, description="Type of knowledge: 'conversational' | 'reusable' | 'verified'."

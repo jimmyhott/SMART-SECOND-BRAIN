@@ -33,6 +33,11 @@ Version: 0.1.0
 """
 
 from langgraph.graph import StateGraph, END
+try:
+    # LangGraph interrupt for human-in-the-loop pauses
+    from langgraph.types import interrupt  # type: ignore
+except Exception:  # Fallback if interrupt is unavailable
+    interrupt = None  # type: ignore
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.checkpoint.sqlite import SqliteSaver
 import sqlite3
@@ -40,6 +45,7 @@ import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from langchain.prompts import ChatPromptTemplate
+from pathlib import Path
 import datetime
 from ..core.knowledge_state import KnowledgeState
 from ..core.conversation_memory import conversation_memory
@@ -372,27 +378,10 @@ class MasterGraphBuilder:
                 [f"{m['role']}: {m['content']}" for m in (state.messages or [])]
             )
 
-            # --- Define enhanced RAG prompt template with conversation context ---
-            template = """
-            You are a helpful knowledge assistant with access to conversation history.
-
-            CONVERSATION HISTORY:
-            {conversation}
-
-            CURRENT USER QUESTION:
-            {query}
-
-            RETRIEVED KNOWLEDGE BASE CONTEXT:
-            {context}
-
-            INSTRUCTIONS:
-            - Use the conversation history to understand context and references
-            - Base your answer primarily on the retrieved knowledge base context
-            - If the knowledge base context is insufficient, say "I don't know based on available knowledge."
-            - Consider previous questions and answers to provide better context
-            - Keep the answer clear, concise, and contextually relevant
-            - If the user refers to something from earlier in the conversation, acknowledge it
-            """
+            # --- Load externalized prompt template ---
+            prompt_path = Path(__file__).resolve().parent.parent / "prompts" / "answer_prompt.txt"
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                template = f.read()
             prompt = ChatPromptTemplate.from_template(template)
             chain = prompt | self.llm
 
@@ -428,7 +417,9 @@ class MasterGraphBuilder:
         
         This node manages the human review process, supporting various
         feedback types including approval, rejection, and manual editing.
-        Implements auto-approval for non-interactive scenarios.
+        Implements a LangGraph interrupt to pause execution for human input when
+        no explicit feedback is present. Falls back to auto-approval in
+        non-interactive scenarios if interrupt is unavailable.
         
         Args:
             state: KnowledgeState object containing generated_answer and optional feedback
@@ -453,8 +444,25 @@ class MasterGraphBuilder:
             # Check for explicit human feedback
             feedback = getattr(state, "human_feedback", None)
 
+            # Determine whether human review is required
+            require_review = getattr(state, "require_human_review", None)
+            if require_review is None:
+                # Infer from knowledge_type when not explicitly set
+                require_review = getattr(state, "knowledge_type", "conversational") in ("reusable", "verified")
+
+            # If review is required, no feedback yet, and interrupt is available, pause the graph here
+            if require_review and not feedback and interrupt is not None:
+                # Message guides the API/UI to provide the required fields back
+                _ = interrupt(
+                    "Awaiting human review: set 'human_feedback' to one of"
+                    " ['approved','rejected','edited'] and optionally set"
+                    " 'edited_answer' when feedback is 'edited'."
+                )
+                # Execution will resume here once feedback is supplied via the graph resume
+                feedback = getattr(state, "human_feedback", None)
+
             if not feedback:
-                # Auto-approval path for batch or non-interactive runs
+                # Auto-approval path when running headless or interrupt not available
                 feedback = "approved"
                 state.final_answer = state.generated_answer
                 state.logs = (state.logs or []) + ["✅ Auto-approved answer"]

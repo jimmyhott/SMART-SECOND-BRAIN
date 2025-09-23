@@ -224,16 +224,31 @@ class QueryRequest(BaseModel):
     Attributes:
         query: Required question or query text
         thread_id: Optional thread ID for maintaining conversation context
+        knowledge_type: Optional knowledge type guiding storage and review
+        require_human_review: Optional flag to force human-in-the-loop interrupt
     """
     query: str = Field(..., description="The question to ask")
     thread_id: Optional[str] = Field(None, description="Thread ID for conversation continuity")
+    knowledge_type: Optional[str] = Field(
+        None,
+        description="Knowledge type: 'conversational' | 'reusable' | 'verified'"
+    )
+    require_human_review: Optional[bool] = Field(
+        None,
+        description=(
+            "If True, pause at review and wait for feedback; if False, do not pause; "
+            "if None, infer from knowledge_type ('reusable'/'verified' -> pause)."
+        )
+    )
 
     class Config:
         """Pydantic configuration for request validation and documentation."""
         schema_extra = {
             "example": {
                 "query": "What are the key features of artificial intelligence?",
-                "thread_id": "conversation_123"
+                "thread_id": "conversation_123",
+                "knowledge_type": "reusable",
+                "require_human_review": true
             }
         }
 
@@ -671,7 +686,9 @@ async def query_knowledge_base(
             query_type="query",                            # Workflow type identifier
             user_input=request.query,                      # User's question
             categories=[],                                 # No categories for queries
-            messages=conversation_history                  # Use custom conversation memory
+            messages=conversation_history,                 # Use custom conversation memory
+            knowledge_type=request.knowledge_type,
+            require_human_review=request.require_human_review
         )
 
         # Ensure compiled graph is available
@@ -1061,35 +1078,25 @@ async def submit_feedback(
                 feedback_state.edited_answer = request.edits
                 logger.info(f"🔍 Updated edited_answer with edits: {request.edits[:100]}...")
             
-            # Process the feedback through the workflow
-            logger.info(f"🔄 Processing feedback through workflow")
-            
-            # Process through human review node
-            review_result = graph_builder.human_review_node(feedback_state)
-            
-            # If approved or edited, continue to validation
-            if review_result.human_feedback in ["approved", "edited"]:
-                validation_result = graph_builder.validated_store_node(review_result)
-                final_state = validation_result
-            else:
-                final_state = review_result
-            
-            # Update the conversation state in LangGraph checkpointing
-            # We need to invoke the graph with the updated state to persist it
-            updated_config = {"configurable": {"thread_id": request.thread_id}}
-            compiled_graph.update_state(updated_config, final_state.dict())
+            # Resume the graph from the interrupt by invoking with the updated state
+            logger.info(f"🔄 Resuming workflow after human feedback")
+            result = compiled_graph.invoke(
+                feedback_state,
+                config={"configurable": {"thread_id": request.thread_id}}
+            )
             
             # Determine action taken based on feedback and knowledge type
-            if request.feedback == "approved":
-                if request.knowledge_type in ("reusable", "verified"):
-                    action_taken = f"Answer approved and stored as {request.knowledge_type} knowledge in vector database"
+            # Derive action from result
+            if result.get("human_feedback") == "approved":
+                if result.get("knowledge_type") in ("reusable", "verified"):
+                    action_taken = f"Answer approved and stored as {result.get('knowledge_type')} knowledge in vector database"
                 else:
                     action_taken = "Answer approved and stored in conversation history"
-            elif request.feedback == "rejected":
+            elif result.get("human_feedback") == "rejected":
                 action_taken = "Answer rejected, not stored in knowledge base"
-            elif request.feedback == "edited":
-                if request.knowledge_type in ("reusable", "verified"):
-                    action_taken = f"Answer edited and stored as {request.knowledge_type} knowledge in vector database"
+            elif result.get("human_feedback") == "edited":
+                if result.get("knowledge_type") in ("reusable", "verified"):
+                    action_taken = f"Answer edited and stored as {result.get('knowledge_type')} knowledge in vector database"
                 else:
                     action_taken = "Answer edited and stored in conversation history"
             else:
@@ -1102,7 +1109,7 @@ async def submit_feedback(
             return FeedbackResponse(
                 success=True,
                 thread_id=request.thread_id,
-                feedback=request.feedback,
+                feedback=result.get("human_feedback", request.feedback),
                 action_taken=action_taken,
                 timestamp=datetime.utcnow(),
                 message="Feedback processed successfully"
