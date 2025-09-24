@@ -319,9 +319,66 @@ Content-Type: application/json
 }
 ```
 
+#### Human-in-the-Loop (HITL) with Interrupts
+
+The query workflow can pause at a human-review step using LangGraph interrupts. You can opt-in per request:
+
+```http
+POST /smart-second-brain/api/v1/graph/query
+Content-Type: application/json
+
+{
+  "query": "Please summarize the content",
+  "knowledge_type": "reusable",            // conversational | reusable | verified
+  "require_human_review": true              // if omitted, inferred from knowledge_type
+}
+```
+
+If a pause is required, the response includes a `thread_id` you will use to approve or edit the answer.
+
+Approve to resume and optionally store:
+
+```http
+POST /smart-second-brain/api/v1/graph/feedback
+Content-Type: application/json
+
+{
+  "thread_id": "query_1700000000",
+  "feedback": "approved",                  // approved | rejected | edited
+  "knowledge_type": "reusable"            // controls storage policy
+}
+```
+
+Edit the answer and resume:
+
+```http
+POST /smart-second-brain/api/v1/graph/feedback
+Content-Type: application/json
+
+{
+  "thread_id": "query_1700000000",
+  "feedback": "edited",
+  "edits": "<your edited final answer>",
+  "knowledge_type": "reusable"
+}
+```
+
 #### **Health Check**
 ```http
 GET /smart-second-brain/api/v1/graph/health
+```
+
+#### **Submit Feedback (HITL Resume)**
+```http
+POST /smart-second-brain/api/v1/graph/feedback
+Content-Type: application/json
+
+{
+  "thread_id": "<thread_id from query response>",
+  "feedback": "approved" | "rejected" | "edited",
+  "edits": "<required when feedback is 'edited'>",
+  "knowledge_type": "conversational" | "reusable" | "verified"
+}
 ```
 
 ### API Response Format
