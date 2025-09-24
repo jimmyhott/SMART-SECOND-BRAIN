@@ -536,6 +536,7 @@ class MasterGraphBuilder:
             knowledge_type = getattr(state, "knowledge_type", "conversational")
             
             # Always store in checkpoint memory for conversation continuity
+            # Mark as validated at this point; downstream vector storage may refine status
             state.status = "validated"
             state.logs = (state.logs or []) + ["✅ Conversation history managed by LangGraph checkpoint memory (thread-isolated)"]
             
@@ -572,13 +573,19 @@ class MasterGraphBuilder:
                         logger.info(f"📚 Document metadata: {doc.metadata}")
                         self.vectorstore.add_documents([doc])
                         state.logs = (state.logs or []) + [f"✅ {knowledge_type.title()} knowledge stored in vector database"]
+                        # Refine status to indicate successful vector storage
+                        state.status = "stored"
                         logger.info(f"📚 Successfully stored {knowledge_type} knowledge in vector DB")
                     else:
                         state.logs = (state.logs or []) + ["⚠️ Vector store not available, skipping vector storage"]
+                        # Refine status to indicate validation without vector storage
+                        state.status = "validated_no_store"
                         logger.warning("⚠️ Vector store not available, skipping vector storage")
                         
                 except Exception as e:
                     state.logs = (state.logs or []) + [f"❌ Failed to store in vector DB: {e}"]
+                    # Refine status to indicate vector storage failure after validation
+                    state.status = "store_failed"
                     logger.error(f"Failed to store knowledge in vector DB: {e}")
             else:
                 # Conversational content - checkpoint memory only

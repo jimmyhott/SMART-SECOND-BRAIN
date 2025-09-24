@@ -37,7 +37,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from io import BytesIO
 
-from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Form
+from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Form, Request
 
 # =============================================================================
 # PATH CONFIGURATION
@@ -79,13 +79,10 @@ router = APIRouter(prefix="/api/v1/graph", tags=["graph"])
 # GLOBAL STATE MANAGEMENT
 # =============================================================================
 
-# Global graph instances for application lifecycle management
-# In production, consider using dependency injection or a proper state manager
-graph_builder = None      # MasterGraphBuilder instance
-compiled_graph = None     # Compiled LangGraph workflow
+# Prefer app.state over module-level globals for better lifecycle management
 
 
-def get_graph_builder() -> MasterGraphBuilder:
+def get_graph_builder(request: Request) -> MasterGraphBuilder:
     """
     Dependency function to get or create graph builder instance.
     
@@ -103,7 +100,9 @@ def get_graph_builder() -> MasterGraphBuilder:
         This is a global singleton pattern. In production, consider using
         dependency injection or a proper state management system.
     """
-    global graph_builder, compiled_graph
+    # Use app.state; lazily initialize if missing
+    graph_builder = getattr(request.app.state, "graph_builder", None)
+    compiled_graph = getattr(request.app.state, "compiled_graph", None)
 
     if graph_builder is None:
         # Extract configuration from environment settings
@@ -168,6 +167,8 @@ def get_graph_builder() -> MasterGraphBuilder:
             
             # Compile the workflow for execution
             compiled_graph = graph_builder.build()
+            request.app.state.graph_builder = graph_builder
+            request.app.state.compiled_graph = compiled_graph
             logger.info("✅ Graph builder initialized with all models")
             
         except Exception as e:
@@ -248,7 +249,7 @@ class QueryRequest(BaseModel):
                 "query": "What are the key features of artificial intelligence?",
                 "thread_id": "conversation_123",
                 "knowledge_type": "reusable",
-                "require_human_review": true
+                "require_human_review": True
             }
         }
 

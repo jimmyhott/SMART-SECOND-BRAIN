@@ -17,9 +17,61 @@ Version: 0.1.0
 """
 
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.core.config import settings
+
+# Initialize graph builder and compiled graph at app startup
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        # Lazy import to avoid heavy imports at module load
+        from agentic.workflows.master_graph_builder import MasterGraphBuilder
+        from langchain_openai import AzureOpenAIEmbeddings, AzureChatOpenAI
+        from langchain_chroma import Chroma
+
+        # Initialize models from settings
+        if settings.openai_api_key and settings.azure_openai_endpoint_url:
+            embedding_model = AzureOpenAIEmbeddings(
+                azure_deployment="text-embedding-3-small",
+                openai_api_version="2024-12-01-preview",
+                azure_endpoint=settings.azure_openai_endpoint_url,
+                openai_api_key=settings.openai_api_key,
+            )
+            llm = AzureChatOpenAI(
+                azure_deployment="gpt-4o",
+                openai_api_version="2024-12-01-preview",
+                azure_endpoint=settings.azure_openai_endpoint_url,
+                openai_api_key=settings.openai_api_key,
+                temperature=0.1,
+            )
+
+            vectorstore = Chroma(
+                collection_name="smart_second_brain",
+                embedding_function=embedding_model,
+                persist_directory="./chroma_db",
+            )
+
+            graph_builder = MasterGraphBuilder(
+                llm=llm,
+                embedding_model=embedding_model,
+                vectorstore=vectorstore,
+                chromadb_dir="./chroma_db",
+            )
+            compiled_graph = graph_builder.build()
+
+            app.state.graph_builder = graph_builder
+            app.state.compiled_graph = compiled_graph
+        else:
+            # Defer initialization to first request if credentials absent
+            app.state.graph_builder = None
+            app.state.compiled_graph = None
+    except Exception:
+        # Ensure attributes exist even if init fails
+        app.state.graph_builder = None
+        app.state.compiled_graph = None
+    yield
 
 # =============================================================================
 # FASTAPI APPLICATION CONFIGURATION
@@ -33,6 +85,7 @@ app = FastAPI(
     # Only show API docs in debug mode for security
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None,
+    lifespan=lifespan,
 )
 
 # =============================================================================
