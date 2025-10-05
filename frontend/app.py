@@ -285,6 +285,23 @@ def query_knowledge(query: str, thread_id: str = None):
         st.error(f"Error: {str(e)}")
         return None
 
+def is_idk_response(response_text: str) -> bool:
+    """Check if the AI response indicates it doesn't know something"""
+    idk_phrases = [
+        "i don't know",
+        "i don't know based on available knowledge",
+        "based on available knowledge",
+        "insufficient information",
+        "no information found",
+        "not mentioned in",
+        "not available in",
+        "cannot find",
+        "unable to find"
+    ]
+    
+    response_lower = response_text.lower()
+    return any(phrase in response_lower for phrase in idk_phrases)
+
 def submit_feedback(thread_id: str, feedback: str, edits: str = None, comment: str = None, knowledge_type: str = None):
     """Submit feedback for an AI-generated answer"""
     try:
@@ -306,6 +323,34 @@ def submit_feedback(thread_id: str, feedback: str, edits: str = None, comment: s
             }
         else:
             st.error(f"Error submitting feedback: {result['error']}")
+            return None
+            
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+        return None
+
+def submit_knowledge(thread_id: str, user_knowledge: str, original_query: str):
+    """Submit user-provided knowledge when AI doesn't know something"""
+    try:
+        # Use the ingest endpoint to store the knowledge
+        data = {
+            "document": user_knowledge,
+            "source": f"User Knowledge for: {original_query}",
+            "categories": ["user_provided"],
+            "author": "user",
+            "knowledge_type": "verified"
+        }
+        
+        result = api_request(API_ENDPOINTS["ingest"], "POST", data)
+        
+        if "error" not in result:
+            return {
+                "success": result.get("success", False),
+                "message": "Knowledge stored successfully",
+                "action_taken": "User knowledge added to database"
+            }
+        else:
+            st.error(f"Error storing knowledge: {result['error']}")
             return None
             
     except Exception as e:
@@ -594,64 +639,121 @@ def main():
                     if not chat.get("error", False):
                         with st.container():
                             st.markdown("---")
-                            col1, col2, col3, col4 = st.columns([0.2, 0.2, 0.2, 0.4])
                             
-                            with col1:
-                                if st.button("👍 Approve", key=f"approve_{i}", help="Mark this answer as approved"):
-                                    if submit_feedback(chat.get("thread_id", ""), "approved"):
-                                        st.session_state.chat_history[i]["feedback_status"] = "approved"
-                                        st.success("Answer approved!")
-                                        st.rerun()
+                            # Check if this is an "I don't know" response
+                            is_idk = is_idk_response(chat["content"])
                             
-                            with col2:
-                                if st.button("👎 Reject", key=f"reject_{i}", help="Mark this answer as rejected"):
-                                    if submit_feedback(chat.get("thread_id", ""), "rejected"):
-                                        st.session_state.chat_history[i]["feedback_status"] = "rejected"
-                                        st.success("Answer rejected!")
-                                        st.rerun()
-                            
-                            with col3:
-                                if st.button("✏️ Edit", key=f"edit_{i}", help="Provide edited version"):
-                                    # Store the message index for editing
-                                    st.session_state[f"editing_message_{i}"] = True
-                                    st.rerun()
-                            
-                            with col4:
-                                # Show current feedback status
-                                feedback_status = chat.get("feedback_status", "pending")
-                                if feedback_status == "approved":
-                                    st.success("✅ Approved")
-                                elif feedback_status == "rejected":
-                                    st.error("❌ Rejected")
-                                elif feedback_status == "edited":
-                                    st.info("✏️ Edited")
-                                else:
-                                    st.info("⏳ Pending feedback")
-                            
-                            # Show edit interface if editing
-                            if st.session_state.get(f"editing_message_{i}", False):
-                                st.markdown("**Edit the answer:**")
-                                edited_content = st.text_area(
-                                    "Edited answer:",
-                                    value=chat["content"],
-                                    key=f"edit_content_{i}",
-                                    height=100
-                                )
+                            if is_idk:
+                                # Special interface for "I don't know" responses
+                                st.info("🤔 The AI doesn't know about this topic. Help improve the system by providing knowledge!")
                                 
-                                col_edit1, col_edit2 = st.columns([0.3, 0.7])
-                                with col_edit1:
-                                    if st.button("Submit Edit", key=f"submit_edit_{i}"):
-                                        if submit_feedback(chat.get("thread_id", ""), "edited", edits=edited_content):
-                                            st.session_state.chat_history[i]["content"] = edited_content
-                                            st.session_state.chat_history[i]["feedback_status"] = "edited"
-                                            st.session_state[f"editing_message_{i}"] = False
-                                            st.success("Answer updated!")
+                                # Find the original user query for this response
+                                original_query = ""
+                                for j in range(i-1, -1, -1):
+                                    if st.session_state.chat_history[j]["type"] == "user":
+                                        original_query = st.session_state.chat_history[j]["content"]
+                                        break
+                                
+                                # Knowledge input interface
+                                if st.session_state.get(f"providing_knowledge_{i}", False):
+                                    st.markdown("**Provide knowledge about this topic:**")
+                                    user_knowledge = st.text_area(
+                                        f"Knowledge about: {original_query}",
+                                        placeholder="Enter what you know about this topic...",
+                                        key=f"knowledge_input_{i}",
+                                        height=120
+                                    )
+                                    
+                                    col_knowledge1, col_knowledge2 = st.columns([0.3, 0.7])
+                                    with col_knowledge1:
+                                        if st.button("💾 Store Knowledge", key=f"store_knowledge_{i}"):
+                                            if user_knowledge.strip():
+                                                if submit_knowledge(chat.get("thread_id", ""), user_knowledge.strip(), original_query):
+                                                    st.session_state.chat_history[i]["feedback_status"] = "knowledge_provided"
+                                                    st.session_state[f"providing_knowledge_{i}"] = False
+                                                    st.success("Knowledge stored! The system will remember this for future questions.")
+                                                    st.rerun()
+                                            else:
+                                                st.warning("Please enter some knowledge before storing.")
+                                    
+                                    with col_knowledge2:
+                                        if st.button("❌ Cancel", key=f"cancel_knowledge_{i}"):
+                                            st.session_state[f"providing_knowledge_{i}"] = False
+                                            st.rerun()
+                                else:
+                                    col_knowledge_btn, col_status = st.columns([0.3, 0.7])
+                                    with col_knowledge_btn:
+                                        if st.button("📚 Provide Knowledge", key=f"provide_knowledge_{i}"):
+                                            st.session_state[f"providing_knowledge_{i}"] = True
+                                            st.rerun()
+                                    
+                                    with col_status:
+                                        feedback_status = chat.get("feedback_status", "pending")
+                                        if feedback_status == "knowledge_provided":
+                                            st.success("✅ Knowledge provided")
+                                        else:
+                                            st.info("⏳ Waiting for knowledge input")
+                            
+                            else:
+                                # Standard feedback interface for regular responses
+                                col1, col2, col3, col4 = st.columns([0.2, 0.2, 0.2, 0.4])
+                                
+                                with col1:
+                                    if st.button("👍 Approve", key=f"approve_{i}", help="Mark this answer as approved"):
+                                        if submit_feedback(chat.get("thread_id", ""), "approved"):
+                                            st.session_state.chat_history[i]["feedback_status"] = "approved"
+                                            st.success("Answer approved!")
                                             st.rerun()
                                 
-                                with col_edit2:
-                                    if st.button("Cancel", key=f"cancel_edit_{i}"):
-                                        st.session_state[f"editing_message_{i}"] = False
+                                with col2:
+                                    if st.button("👎 Reject", key=f"reject_{i}", help="Mark this answer as rejected"):
+                                        if submit_feedback(chat.get("thread_id", ""), "rejected"):
+                                            st.session_state.chat_history[i]["feedback_status"] = "rejected"
+                                            st.success("Answer rejected!")
+                                            st.rerun()
+                                
+                                with col3:
+                                    if st.button("✏️ Edit", key=f"edit_{i}", help="Provide edited version"):
+                                        # Store the message index for editing
+                                        st.session_state[f"editing_message_{i}"] = True
                                         st.rerun()
+                                
+                                with col4:
+                                    # Show current feedback status
+                                    feedback_status = chat.get("feedback_status", "pending")
+                                    if feedback_status == "approved":
+                                        st.success("✅ Approved")
+                                    elif feedback_status == "rejected":
+                                        st.error("❌ Rejected")
+                                    elif feedback_status == "edited":
+                                        st.info("✏️ Edited")
+                                    else:
+                                        st.info("⏳ Pending feedback")
+                                
+                                # Show edit interface if editing
+                                if st.session_state.get(f"editing_message_{i}", False):
+                                    st.markdown("**Edit the answer:**")
+                                    edited_content = st.text_area(
+                                        "Edited answer:",
+                                        value=chat["content"],
+                                        key=f"edit_content_{i}",
+                                        height=100
+                                    )
+                                    
+                                    col_edit1, col_edit2 = st.columns([0.3, 0.7])
+                                    with col_edit1:
+                                        if st.button("Submit Edit", key=f"submit_edit_{i}"):
+                                            if submit_feedback(chat.get("thread_id", ""), "edited", edits=edited_content):
+                                                st.session_state.chat_history[i]["content"] = edited_content
+                                                st.session_state.chat_history[i]["feedback_status"] = "edited"
+                                                st.session_state[f"editing_message_{i}"] = False
+                                                st.success("Answer updated!")
+                                                st.rerun()
+                                    
+                                    with col_edit2:
+                                        if st.button("Cancel", key=f"cancel_edit_{i}"):
+                                            st.session_state[f"editing_message_{i}"] = False
+                                            st.rerun()
         
         # New Thread button (outside form)
         col_new_thread, col_spacer = st.columns([1, 4])
