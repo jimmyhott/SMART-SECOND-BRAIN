@@ -55,7 +55,6 @@ sys.path.insert(0, str(project_root))
 # Core workflow components
 from agentic.workflows.master_graph_builder import MasterGraphBuilder
 from agentic.core.knowledge_state import KnowledgeState
-from agentic.core.conversation_memory import conversation_memory
 
 # Utilities and configuration
 from shared.utils.logging_config import setup_logging
@@ -682,15 +681,13 @@ async def query_knowledge_base(
         # Use provided thread ID or generate new one for conversation continuity
         thread_id = request.thread_id or f"query_{int(start_time.timestamp())}"
 
-        # Get conversation history from custom memory manager
-        conversation_history = conversation_memory.get_conversation_history(thread_id)
-        
         # Create knowledge state for the query workflow
+        # LangGraph checkpointer will handle conversation history automatically
         state = KnowledgeState(
             query_type="query",                            # Workflow type identifier
             user_input=request.query,                      # User's question
             categories=[],                                 # No categories for queries
-            messages=conversation_history,                 # Use custom conversation memory
+            messages=[],                                   # Empty messages - LangGraph handles history
             knowledge_type=request.knowledge_type,
             require_human_review=request.require_human_review
         )
@@ -708,10 +705,8 @@ async def query_knowledge_base(
             config={"configurable": {"thread_id": thread_id}}
         )
 
-        # Save conversation to custom memory manager
-        conversation_memory.add_message(thread_id, "user", request.query)
-        if result.get("final_answer"):
-            conversation_memory.add_message(thread_id, "assistant", result["final_answer"])
+        # LangGraph checkpointer automatically saves conversation state
+        # No need for manual conversation memory management
 
         # Calculate execution time for performance monitoring
         execution_time = (datetime.utcnow() - start_time).total_seconds()
@@ -1224,18 +1219,12 @@ async def get_feedback_status(
                 
         except Exception as e:
             logger.warning(f"Could not retrieve state from LangGraph checkpointing: {e}")
-            # Fallback: check if there's any conversation history in Redis
-            conversation_history = conversation_memory.get_conversation_history(thread_id)
-            if not conversation_history:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"No conversation found for thread_id: {thread_id}"
-                )
+            # If checkpointing fails, assume no pending feedback
+            raise HTTPException(
+                status_code=404,
+                detail=f"No conversation found for thread_id: {thread_id}"
+            )
             
-            # If we have conversation history but no checkpoint state, assume no pending feedback
-            has_pending_feedback = False
-            current_answer = None
-            feedback_history = []
             status = "conversation_exists"
         
         logger.info(f"✅ Feedback status retrieved: {status}")

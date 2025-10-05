@@ -11,7 +11,7 @@ An intelligent knowledge management platform with AI-powered document processing
 - **Azure OpenAI Integration**: Full support for Azure OpenAI with automatic deployment detection
 - **Smart Query Processing**: RAG (Retrieval-Augmented Generation) for intelligent question answering
 - **Human-in-the-Loop (HITL)**: Feedback system for AI-generated answers with approval/rejection/editing
-- **Thread-based Conversations**: Redis-backed conversation memory for multi-turn conversations
+- **Thread-based Conversations**: SQLite-backed conversation memory for multi-turn conversations
 - **Streamlit Frontend**: Modern web interface with PDF and text ingestion, chat interface, and feedback system
 - **Comprehensive Testing**: 47 tests covering API endpoints, workflows, and integration scenarios
 - **Centralized Logging**: Project-level logging configuration with file and console output
@@ -22,7 +22,7 @@ An intelligent knowledge management platform with AI-powered document processing
 - Python 3.12+
 - Azure OpenAI Service (for AI features)
 - OpenAI API Key (for embeddings and LLM)
-- Redis 8+ (for conversation memory)
+- SQLite (for conversation memory via LangGraph checkpoints)
 
 **Optional:**
 - PostgreSQL 13+ (for future database features)
@@ -51,7 +51,7 @@ The easiest way to get started is using our automated startup scripts that handl
 
 **Prerequisites for startup scripts:**
 ```bash
-pip install uvicorn fastapi streamlit requests redis
+pip install uvicorn fastapi streamlit requests
 ```
 
 ### Manual Setup
@@ -91,18 +91,10 @@ If you prefer to start components manually or need to troubleshoot:
    AZURE_OPENAI_ENDPOINT_URL=https://your-resource.openai.azure.com/
    ```
 
-5. **Start Redis**
+5. **SQLite is automatically handled**
    ```bash
-   # On macOS with Homebrew
-   brew install redis
-   brew services start redis
-   
-   # On Ubuntu/Debian
-   sudo apt install redis-server
-   sudo systemctl start redis
-   
-   # Verify Redis is running
-   redis-cli ping  # Should return PONG
+   # SQLite database is automatically created and managed by LangGraph
+   # No additional setup required - checkpoints stored in ./data/checkpoints.sqlite
    ```
 
 6. **Start the API**
@@ -151,7 +143,7 @@ streamlit run app.py --server.port 5173 --server.address 0.0.0.0
 - 📄 **PDF Ingestion** - Multi-file PDF upload with batch processing and metadata
 - 📝 **Text Ingestion** - Direct text content input with categorization and knowledge type selection
 - 🔍 **Knowledge Query** - Natural language search interface with conversation memory
-- 💬 **Thread-based Conversations** - Redis-backed conversation history with thread management
+- 💬 **Thread-based Conversations** - SQLite-backed conversation history with thread management
 - 👍 **Human Feedback System** - Approve, reject, or edit AI-generated answers
 - 📊 **Status Monitoring** - Live updates and component health
 - 🎨 **Modern UI** - Clean, responsive interface built with Streamlit
@@ -510,8 +502,8 @@ LOG_LEVEL=INFO
 # Optional: CORS Configuration
 ALLOWED_HOSTS=["*"]
 
-# Optional: Redis Configuration (defaults to localhost:6379)
-# REDIS_URL=redis://localhost:6379
+# SQLite checkpointing is automatically configured
+# Checkpoints stored in ./data/checkpoints.sqlite
 
 # Optional: Future Database Configuration
 # DATABASE_URL=postgresql://user:password@localhost/smart_second_brain

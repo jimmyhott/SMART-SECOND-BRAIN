@@ -12,7 +12,7 @@ A modern, clean web interface for the Smart Second Brain AI-powered knowledge ma
 - **Real-time Processing** - Live progress updates and detailed processing results
 - **Advanced Chat Interface** - Modern chat UI with conversation threads and feedback system
 - **Human-in-the-Loop Feedback** - Approve, reject, or edit AI-generated answers
-- **Thread Management** - Redis-backed conversation history with unique thread IDs
+- **Thread Management** - SQLite-backed conversation history with unique thread IDs
 - **Professional Styling** - Clean, responsive design with Bootstrap components
 
 ## Installation
@@ -88,6 +88,6 @@ The chat interface includes a comprehensive feedback system:
 ## Conversation Management
 
 - **Thread-based Conversations**: Each conversation has a unique thread ID
-- **Conversation History**: Redis-backed persistence of chat history
+- **Conversation History**: SQLite-backed persistence of chat history
 - **Message Types**: User messages, assistant responses, and system messages
 - **Feedback Integration**: Seamless integration between chat and feedback systems

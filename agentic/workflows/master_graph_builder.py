@@ -48,7 +48,6 @@ from langchain.prompts import ChatPromptTemplate
 from pathlib import Path
 import datetime
 from ..core.knowledge_state import KnowledgeState
-from ..core.conversation_memory import conversation_memory
 
 # Import centralized logging
 import sys

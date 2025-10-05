@@ -161,20 +161,20 @@ User Query → Document Retrieval → Answer Generation → Human Review → Sto
 - **Query**: Query → Retrieval → Generation → Validation
 - **Feedback**: Human input → State update → Workflow continuation
 
-### 5. **Conversation Memory - Redis-backed State Persistence**
-**Purpose**: Maintain conversation context across sessions.
+### 5. **Conversation Memory - SQLite-backed State Persistence**
+**Purpose**: Maintain conversation context across sessions via LangGraph checkpoints.
 
 **Key Features**:
 - **Thread Management**: Unique conversation identifiers
-- **Message History**: Persistent chat history
+- **Message History**: Persistent chat history via LangGraph checkpoints
 - **Context Preservation**: Maintains conversation context
 - **Session Management**: User session handling
 
-**Redis Usage**:
-- **Key-Value Storage**: Simple data persistence
-- **TTL Support**: Automatic data expiration (7 days)
-- **High Performance**: Fast read/write operations
+**SQLite Usage**:
+- **Checkpoint Storage**: LangGraph workflow state persistence
 - **Thread Isolation**: Separate conversation histories per thread
+- **Automatic Management**: LangGraph handles conversation state automatically
+- **No External Dependencies**: Uses local SQLite database
 
 ## 🎯 Application Capabilities
 
@@ -204,7 +204,7 @@ User Query → Document Retrieval → Answer Generation → Human Review → Sto
 
 ### 5. **Conversation Management**
 - **Thread-based Conversations**: Maintain conversation context
-- **History Persistence**: Remember previous interactions (Redis-backed)
+- **History Persistence**: Remember previous interactions (SQLite-backed via LangGraph)
 - **Context Awareness**: Use conversation history for better answers
 - **Session Management**: Handle multiple concurrent conversations
 
@@ -246,7 +246,7 @@ Validation → State Modification → Resume Processing → Result Storage
 ### 2. **Mocking Strategies**
 - **LLM Mocking**: Simulate AI responses for consistent testing
 - **Vector DB Mocking**: Test retrieval logic without database dependency
-- **Redis Mocking**: Test conversation memory without external Redis dependency
+- **SQLite Mocking**: Test conversation memory without database dependency
 - **File System Mocking**: Test document processing without file I/O
 
 ### 3. **Test Coverage Areas**
@@ -260,7 +260,7 @@ Validation → State Modification → Resume Processing → Result Storage
 ### 1. **Performance Optimizations**
 - **Async Processing**: Non-blocking request handling
 - **Vector Indexing**: Efficient similarity search
-- **Caching**: Redis for conversation memory and frequently accessed data
+- **Caching**: SQLite for conversation memory and workflow state persistence
 - **Batch Processing**: Handle multiple documents efficiently
 
 ### 2. **Scalability Patterns**
@@ -341,7 +341,7 @@ Validation → State Modification → Resume Processing → Result Storage
 - **LangGraph Documentation**: Deep dive into workflow orchestration
 - **FastAPI Advanced Features**: Middleware, dependencies, and testing
 - **Vector Databases**: ChromaDB, Pinecone, and Weaviate comparison
-- **Redis Patterns**: Conversation memory, caching, pub/sub, and data structures
+- **SQLite Patterns**: Conversation memory, workflow state persistence, and data structures
 
 ### 2. **AI/ML Concepts**
 - **Embedding Models**: Different embedding strategies and models
