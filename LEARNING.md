@@ -10,7 +10,7 @@ The Smart Second Brain is a **knowledge management platform** that combines AI-p
 ```
 Frontend (Streamlit) ↔ API Gateway (FastAPI) ↔ AI Workflows (LangGraph) ↔ Vector DB (ChromaDB)
                                     ↕
-                              Redis (Conversation Memory)
+                              SQLite (Conversation Memory)
 ```
 
 ## 🧠 Key Technologies & Concepts
