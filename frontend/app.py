@@ -57,6 +57,10 @@ st.markdown("""
     .status-healthy { background: #28a745; }
     .status-error { background: #dc3545; }
     .status-warning { background: #ffc107; }
+    .header-icon {
+        vertical-align: middle;
+        margin-right: 10px;
+    }
     .chat-message {
         padding: 0.75rem 1rem;
         border-radius: 18px;
@@ -338,24 +342,12 @@ def get_feedback_status(thread_id: str):
 # Main App
 def main():
     # Header
-    col1, col2, col3 = st.columns([0.1, 0.6, 0.3])
-    
-    with col1:
-        st.image("second-brain.jpeg", width=40)
-    
-    with col2:
-        st.markdown("""
-        <div class="d-flex align-items-center">
-            <h1 class="me-3 mb-0">Smart Second Brain</h1>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("""
-        <div class="d-flex align-items-center h-100">
-            <span class="text-muted">AI-Powered Knowledge Management</span>
-        </div>
-        """, unsafe_allow_html=True)
+    st.markdown("""
+    <div class="d-flex align-items-center mb-4">
+        <img src="data:image/jpeg;base64,{}" class="header-icon" width="60" height="60" style="border-radius: 50%;">
+        <h1 class="mb-0">Smart Second Brain</h1>
+    </div>
+    """.format(get_base64_image("second-brain.jpeg")), unsafe_allow_html=True)
     
     # Health Status (Compact)
     check_system_health()
