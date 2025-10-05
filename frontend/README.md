@@ -52,6 +52,7 @@ The frontend connects to:
 - Knowledge Query: `http://localhost:8000/smart-second-brain/api/v1/graph/query`
 - Submit Feedback: `http://localhost:8000/smart-second-brain/api/v1/graph/feedback`
 - Get Feedback Status: `http://localhost:8000/smart-second-brain/api/v1/graph/feedback/{thread_id}`
+- Clear Vector Database: `http://localhost:8000/smart-second-brain/api/v1/graph/clear-vector-db` (⚠️ irreversible)
 
 ## Document Processing
 

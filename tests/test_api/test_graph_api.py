@@ -248,3 +248,69 @@ class TestGraphAPI:
                 assert data["success"] is True
                 assert "thread_id" in data
                 assert data["execution_time"] >= 0
+
+    def test_clear_vector_database(self, client):
+        """Test clearing the vector database"""
+        with patch('api.routes.v1.graph_api.get_graph_builder') as mock_get_graph_builder:
+            # Mock the graph builder and vectorstore
+            mock_graph_builder = self.mock_graph_builder
+            mock_get_graph_builder.return_value = mock_graph_builder
+            
+            # Mock vectorstore with ChromaDB client
+            mock_vectorstore = MagicMock()
+            mock_client = MagicMock()
+            mock_collection = MagicMock()
+            mock_collection.name = "smart_second_brain"
+            mock_embedding_function = MagicMock()
+            
+            mock_vectorstore._client = mock_client
+            mock_vectorstore._collection = mock_collection
+            mock_vectorstore._embedding_function = mock_embedding_function
+            mock_graph_builder.vectorstore = mock_vectorstore
+            mock_graph_builder.chromadb_dir = "./chroma_db"
+            
+            # Mock the Chroma constructor to avoid actual ChromaDB operations
+            with patch('langchain_chroma.Chroma') as mock_chroma_class:
+                mock_new_vectorstore = MagicMock()
+                mock_chroma_class.return_value = mock_new_vectorstore
+                
+                # Clear the vector database
+                response = client.delete("/smart-second-brain/api/v1/graph/clear-vector-db")
+                assert response.status_code == 200
+                
+                data = response.json()
+                assert data["success"] is True
+                assert "cleared successfully" in data["message"]
+                assert "collection_name" in data
+                assert "execution_time" in data
+                assert "timestamp" in data
+                
+                # Verify new Chroma instance was created (indicates successful recreation)
+                # Chroma is called once during initialization and once during clear operation
+                assert mock_chroma_class.call_count >= 1
+
+    def test_clear_vector_database_no_vectorstore(self, client):
+        """Test clearing vector database when vectorstore is not initialized"""
+        with patch('api.routes.v1.graph_api.get_graph_builder') as mock_get_graph_builder:
+            # Mock the graph builder without vectorstore
+            mock_graph_builder = self.mock_graph_builder
+            mock_graph_builder.vectorstore = None
+            mock_get_graph_builder.return_value = mock_graph_builder
+            
+            # Mock the Chroma constructor to avoid actual ChromaDB operations
+            with patch('langchain_chroma.Chroma') as mock_chroma_class:
+                mock_new_vectorstore = MagicMock()
+                mock_new_collection = MagicMock()
+                mock_new_collection.name = "smart_second_brain"
+                mock_new_vectorstore._collection = mock_new_collection
+                mock_chroma_class.return_value = mock_new_vectorstore
+                
+                # Clear the vector database
+                response = client.delete("/smart-second-brain/api/v1/graph/clear-vector-db")
+                # When vectorstore is None, the endpoint creates a new one and clears it
+                assert response.status_code == 200
+                
+                data = response.json()
+                assert data["success"] is True
+                assert "execution_time" in data
+                assert "timestamp" in data

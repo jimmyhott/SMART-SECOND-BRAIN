@@ -295,6 +295,25 @@ Once the server is running, visit:
 - **ReDoc Documentation**: http://localhost:8000/redoc
 - **OpenAPI Schema**: http://localhost:8000/openapi.json
 
+### Maintenance Scripts
+
+#### **Clear Vector Database**
+```bash
+# Interactive mode with confirmation
+python clear_vector_db.py
+
+# Non-interactive mode (for automation)
+python clear_vector_db.py --confirm
+
+# Create backup before clearing
+python clear_vector_db.py --backup --confirm
+
+# Custom collection and directory
+python clear_vector_db.py --collection "my_collection" --directory "./custom_chroma"
+```
+
+⚠️ **Warning**: This operation is irreversible and will delete ALL vector data.
+
 ### Core API Endpoints
 
 #### **Text Document Ingestion**
@@ -398,6 +417,11 @@ Content-Type: application/json
 #### **Get Feedback Status**
 ```http
 GET /smart-second-brain/api/v1/graph/feedback/{thread_id}
+```
+
+#### **Clear Vector Database**
+```http
+DELETE /smart-second-brain/api/v1/graph/clear-vector-db
 ```
 
 ### API Response Format

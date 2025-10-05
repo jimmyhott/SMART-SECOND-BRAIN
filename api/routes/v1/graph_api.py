@@ -1245,3 +1245,79 @@ async def get_feedback_status(
             status_code=500,
             detail=f"Failed to retrieve feedback status: {str(e)}"
         )
+
+
+@router.delete("/clear-vector-db", response_model=dict)
+async def clear_vector_database(
+    http_request: Request,
+    graph_builder: MasterGraphBuilder = Depends(get_graph_builder)
+):
+    """
+    Clear all data from the vector database.
+    
+    This endpoint removes all documents, embeddings, and metadata from the ChromaDB
+    vector database. This is useful for:
+    - Starting fresh with a clean knowledge base
+    - Removing all ingested documents
+    - Resetting the system for testing
+    
+    ⚠️ **Warning**: This operation is irreversible and will delete ALL vector data.
+    
+    Returns:
+        dict: Success message and operation details
+    """
+    start_time = datetime.utcnow()
+    
+    try:
+        logger.info("🗑️ Starting vector database cleanup")
+        
+        # Get the compiled graph
+        compiled_graph = getattr(http_request.app.state, "compiled_graph", None)
+        if compiled_graph is None:
+            compiled_graph = graph_builder.build()
+            http_request.app.state.compiled_graph = compiled_graph
+        
+        # Clear the vector database
+        if graph_builder.vectorstore:
+            # Get the ChromaDB client from the vectorstore
+            chroma_client = graph_builder.vectorstore._client
+            
+            # Delete the entire collection
+            collection_name = graph_builder.vectorstore._collection.name
+            chroma_client.delete_collection(collection_name)
+            
+            # Recreate the vectorstore with the same configuration
+            from langchain_chroma import Chroma
+            new_vectorstore = Chroma(
+                collection_name=collection_name,
+                embedding_function=graph_builder.vectorstore._embedding_function,
+                persist_directory=graph_builder.chromadb_dir
+            )
+            
+            # Update the graph builder's vectorstore reference
+            graph_builder.vectorstore = new_vectorstore
+            
+            logger.info(f"✅ Cleared vector database collection: {collection_name}")
+            
+            # Calculate execution time
+            execution_time = (datetime.utcnow() - start_time).total_seconds()
+            
+            return {
+                "success": True,
+                "message": "Vector database cleared successfully",
+                "collection_name": collection_name,
+                "execution_time": execution_time,
+                "timestamp": datetime.utcnow()
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Vector database not initialized"
+            )
+            
+    except Exception as e:
+        logger.error(f"❌ Failed to clear vector database: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to clear vector database: {str(e)}"
+        )
