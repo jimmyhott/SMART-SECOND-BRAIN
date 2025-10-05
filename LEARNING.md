@@ -20,7 +20,7 @@ Frontend (Streamlit) ↔ API Gateway (FastAPI) ↔ AI Workflows (LangGraph) ↔ 
 
 **Key Learnings**:
 - **State Management**: LangGraph maintains workflow state across multiple nodes
-- **Checkpointing**: Automatic state persistence for resumable workflows
+- **Checkpointing**: SQLite-based state persistence for resumable workflows
 - **Human-in-the-Loop**: Built-in interrupt mechanisms for human review
 - **Node-based Architecture**: Each step is a discrete node with clear inputs/outputs
 
@@ -56,7 +56,23 @@ Frontend (Streamlit) ↔ API Gateway (FastAPI) ↔ AI Workflows (LangGraph) ↔ 
 - Handles synonyms and related concepts
 - Scales to large document collections
 
-### 4. **FastAPI - Modern Python Web Framework**
+### 4. **SQLite Checkpointing (LangGraph State Persistence)**
+**Purpose**: Persist workflow state for resumable operations and conversation continuity.
+
+**Key Features**:
+- **Workflow State**: Save intermediate results between workflow nodes
+- **Conversation Continuity**: Maintain context across API calls
+- **Resumable Operations**: Continue interrupted workflows
+- **Thread Isolation**: Separate state per conversation thread
+
+**Storage Location**: `./data/checkpoints.sqlite`
+
+**Application in Project**:
+- Persist LangGraph workflow state between nodes
+- Enable conversation continuity across API calls
+- Support human-in-the-loop workflow interruptions
+
+### 5. **FastAPI - Modern Python Web Framework**
 **Purpose**: High-performance API framework with automatic documentation and type safety.
 
 **Key Features Used**:
@@ -70,7 +86,7 @@ Frontend (Streamlit) ↔ API Gateway (FastAPI) ↔ AI Workflows (LangGraph) ↔ 
 - **Middleware Integration**: Request/response processing
 - **State Management**: Application-level state via `app.state`
 
-### 5. **Streamlit - Rapid Web App Development**
+### 6. **Streamlit - Rapid Web App Development**
 **Purpose**: Build interactive web applications with minimal frontend code.
 
 **Key Patterns**:
@@ -145,7 +161,7 @@ User Query → Document Retrieval → Answer Generation → Human Review → Sto
 - **Query**: Query → Retrieval → Generation → Validation
 - **Feedback**: Human input → State update → Workflow continuation
 
-### 4. **Conversation Memory - Redis-backed State Persistence**
+### 5. **Conversation Memory - Redis-backed State Persistence**
 **Purpose**: Maintain conversation context across sessions.
 
 **Key Features**:
@@ -156,8 +172,9 @@ User Query → Document Retrieval → Answer Generation → Human Review → Sto
 
 **Redis Usage**:
 - **Key-Value Storage**: Simple data persistence
-- **TTL Support**: Automatic data expiration
+- **TTL Support**: Automatic data expiration (7 days)
 - **High Performance**: Fast read/write operations
+- **Thread Isolation**: Separate conversation histories per thread
 
 ## 🎯 Application Capabilities
 
@@ -187,7 +204,7 @@ User Query → Document Retrieval → Answer Generation → Human Review → Sto
 
 ### 5. **Conversation Management**
 - **Thread-based Conversations**: Maintain conversation context
-- **History Persistence**: Remember previous interactions
+- **History Persistence**: Remember previous interactions (Redis-backed)
 - **Context Awareness**: Use conversation history for better answers
 - **Session Management**: Handle multiple concurrent conversations
 
@@ -229,7 +246,7 @@ Validation → State Modification → Resume Processing → Result Storage
 ### 2. **Mocking Strategies**
 - **LLM Mocking**: Simulate AI responses for consistent testing
 - **Vector DB Mocking**: Test retrieval logic without database dependency
-- **Redis Mocking**: Test conversation memory without external services
+- **Redis Mocking**: Test conversation memory without external Redis dependency
 - **File System Mocking**: Test document processing without file I/O
 
 ### 3. **Test Coverage Areas**
@@ -243,7 +260,7 @@ Validation → State Modification → Resume Processing → Result Storage
 ### 1. **Performance Optimizations**
 - **Async Processing**: Non-blocking request handling
 - **Vector Indexing**: Efficient similarity search
-- **Caching**: Redis for frequently accessed data
+- **Caching**: Redis for conversation memory and frequently accessed data
 - **Batch Processing**: Handle multiple documents efficiently
 
 ### 2. **Scalability Patterns**
@@ -324,7 +341,7 @@ Validation → State Modification → Resume Processing → Result Storage
 - **LangGraph Documentation**: Deep dive into workflow orchestration
 - **FastAPI Advanced Features**: Middleware, dependencies, and testing
 - **Vector Databases**: ChromaDB, Pinecone, and Weaviate comparison
-- **Redis Patterns**: Caching, pub/sub, and data structures
+- **Redis Patterns**: Conversation memory, caching, pub/sub, and data structures
 
 ### 2. **AI/ML Concepts**
 - **Embedding Models**: Different embedding strategies and models
