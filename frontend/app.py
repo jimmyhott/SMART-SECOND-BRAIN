@@ -271,12 +271,36 @@ def query_knowledge(query: str, thread_id: str = None):
         result = api_request(API_ENDPOINTS["query"], "POST", data)
         
         if "error" not in result:
+            # Extract data from the KnowledgeState result
+            result_data = result.get("result", {})
+            generated_answer = result_data.get("generated_answer", "No answer generated")
+            
+            # Parse JSON response to extract answer and metadata
+            is_idk_response = False
+            parsed_answer = generated_answer
+            
+            if isinstance(generated_answer, str) and generated_answer.strip().startswith('{'):
+                try:
+                    import json
+                    response_data = json.loads(generated_answer)
+                    if isinstance(response_data, dict):
+                        parsed_answer = response_data.get("answer", generated_answer)
+                        is_idk_response = response_data.get("is_idk", False)
+                        confidence = response_data.get("confidence", "unknown")
+                        # Log for debugging (can be removed later)
+                        print(f"🔍 Parsed JSON - Answer: {parsed_answer[:100]}..., IDK: {is_idk_response}, Confidence: {confidence}")
+                except (json.JSONDecodeError, TypeError) as e:
+                    # Keep original answer if parsing fails
+                    print(f"⚠️ JSON parsing failed: {e}")
+                    parsed_answer = generated_answer
+                    is_idk_response = False
+            
             return {
-                "answer": result.get("result", {}).get("generated_answer", "No answer generated"),
+                "answer": parsed_answer,
                 "execution_time": result.get("execution_time", 0),
                 "thread_id": result.get("thread_id", "unknown"),
-                "retrieved_docs": result.get("result", {}).get("retrieved_docs", []),
-                "is_idk_response": result.get("result", {}).get("is_idk_response", False)
+                "retrieved_docs": result_data.get("retrieved_docs", []),
+                "is_idk_response": is_idk_response
             }
         else:
             st.error(f"Error processing query: {result['error']}")
