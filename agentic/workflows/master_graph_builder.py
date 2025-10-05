@@ -244,7 +244,7 @@ class MasterGraphBuilder:
                 # Initialize vectorstore if not provided
                 if not self.vectorstore:
                     self.vectorstore = Chroma(
-                        collection_name="knowledge_base",
+                        collection_name="smart_second_brain",
                         embedding_function=self.embedding_model,
                         persist_directory=self.chromadb_dir
                     )

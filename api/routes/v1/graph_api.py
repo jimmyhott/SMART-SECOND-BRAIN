@@ -81,7 +81,7 @@ router = APIRouter(prefix="/api/v1/graph", tags=["graph"])
 # Prefer app.state over module-level globals for better lifecycle management
 
 
-def get_graph_builder(request: Request) -> MasterGraphBuilder:
+def get_graph_builder(request: Request, collection_name: str = "smart_second_brain") -> MasterGraphBuilder:
     """
     Dependency function to get or create graph builder instance.
     
@@ -147,7 +147,7 @@ def get_graph_builder(request: Request) -> MasterGraphBuilder:
             # Initialize ChromaDB vector store for document storage and retrieval
             from langchain_chroma import Chroma
             vectorstore = Chroma(
-                collection_name="smart_second_brain",        # Collection name for documents
+                collection_name=collection_name,             # Collection name for documents
                 embedding_function=embedding_model,          # Function to create embeddings
                 persist_directory="./chroma_db"              # Local storage directory
             )
@@ -180,6 +180,78 @@ def get_graph_builder(request: Request) -> MasterGraphBuilder:
     return graph_builder
 
 
+def create_graph_builder_with_collection(collection_name: str) -> MasterGraphBuilder:
+    """
+    Create a new graph builder instance with the specified collection name.
+    
+    This function creates a fresh MasterGraphBuilder instance with the specified
+    collection name, ensuring that all operations use the correct collection.
+    
+    Args:
+        collection_name: Name of the ChromaDB collection to use
+        
+    Returns:
+        MasterGraphBuilder: Configured graph builder instance
+    """
+    # Extract configuration from environment settings
+    api_key = settings.openai_api_key
+    azure_endpoint = settings.azure_openai_endpoint_url
+
+    # Validate required configuration
+    if not api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="OpenAI API key not configured"
+        )
+
+    try:
+        # Import Azure OpenAI models for embeddings and language generation
+        from langchain_openai import AzureOpenAIEmbeddings, AzureChatOpenAI
+        
+        # Initialize Azure embedding model for document vectorization
+        embedding_model = AzureOpenAIEmbeddings(
+            azure_deployment="text-embedding-3-small",  # Your embedding deployment name
+            openai_api_version="2024-12-01-preview",    # Azure OpenAI API version
+            azure_endpoint=azure_endpoint,              # Azure service endpoint
+            openai_api_key=api_key                      # API key for authentication
+        )
+        
+        # Initialize Azure language model for text generation and reasoning
+        llm = AzureChatOpenAI(
+            azure_deployment="gpt-4o",                  # Your LLM deployment name
+            openai_api_version="2024-12-01-preview",    # Azure OpenAI API version
+            azure_endpoint=azure_endpoint,              # Azure service endpoint
+            openai_api_key=api_key,                     # API key for authentication
+            temperature=0.1                             # Low temperature for consistent outputs
+        )
+        
+        # Initialize ChromaDB vector store for document storage and retrieval
+        from langchain_chroma import Chroma
+        vectorstore = Chroma(
+            collection_name=collection_name,             # Collection name for documents
+            embedding_function=embedding_model,          # Function to create embeddings
+            persist_directory="./chroma_db"              # Local storage directory
+        )
+        
+        # Create and configure the main workflow orchestrator
+        graph_builder = MasterGraphBuilder(
+            llm=llm,                                    # Language model for reasoning
+            embedding_model=embedding_model,             # Embedding model for vectorization
+            vectorstore=vectorstore,                    # Vector database for storage
+            chromadb_dir="./chroma_db"                  # ChromaDB storage directory
+        )
+        
+        logger.info(f"✅ Graph builder initialized with collection: {collection_name}")
+        return graph_builder
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize graph builder: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to initialize graph: {str(e)}"
+        )
+
+
 # =============================================================================
 # REQUEST/RESPONSE MODELS
 # =============================================================================
@@ -196,11 +268,13 @@ class IngestRequest(BaseModel):
         source: Optional source identifier (e.g., "webpage", "document")
         categories: Optional list of document categories for organization
         metadata: Optional dictionary of additional document metadata
+        collection_name: Optional collection name for vector database storage
     """
     document: str = Field(..., description="The document content to ingest")
     source: Optional[str] = Field(None, description="Source of the document")
     categories: Optional[List[str]] = Field(None, description="Categories for the document")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
+    collection_name: Optional[str] = Field("smart_second_brain", description="Collection name for vector database storage")
 
     class Config:
         """Pydantic configuration for request validation and documentation."""
@@ -226,6 +300,7 @@ class QueryRequest(BaseModel):
         thread_id: Optional thread ID for maintaining conversation context
         knowledge_type: Optional knowledge type guiding storage and review
         require_human_review: Optional flag to force human-in-the-loop interrupt
+        collection_name: Optional collection name for vector database retrieval
     """
     query: str = Field(..., description="The question to ask")
     thread_id: Optional[str] = Field(None, description="Thread ID for conversation continuity")
@@ -240,6 +315,7 @@ class QueryRequest(BaseModel):
             "if None, infer from knowledge_type ('reusable'/'verified' -> pause)."
         )
     )
+    collection_name: Optional[str] = Field("smart_second_brain", description="Collection name for vector database retrieval")
 
     class Config:
         """Pydantic configuration for request validation and documentation."""
@@ -402,6 +478,7 @@ class FeedbackRequest(BaseModel):
         edits: Optional edited text when feedback is "edited"
         comment: Optional additional comments or notes
         knowledge_type: Optional knowledge classification for storage decisions
+        collection_name: Optional collection name for vector database operations
     """
     
     thread_id: str = Field(description="Thread ID to identify the conversation")
@@ -409,6 +486,7 @@ class FeedbackRequest(BaseModel):
     edits: Optional[str] = Field(None, description="Edited text when feedback is 'edited'")
     comment: Optional[str] = Field(None, description="Additional comments or notes")
     knowledge_type: Optional[str] = Field(None, description="Knowledge type: 'conversational', 'reusable', or 'verified'")
+    collection_name: Optional[str] = Field("smart_second_brain", description="Collection name for vector database operations")
 
     class Config:
         """Pydantic configuration for request validation and documentation."""
@@ -560,8 +638,7 @@ async def extract_pdf_text(file: UploadFile) -> str:
 @router.post("/ingest", response_model=WorkflowResponse)
 async def ingest_document(
     request: IngestRequest,
-    http_request: Request,
-    graph_builder: MasterGraphBuilder = Depends(get_graph_builder)
+    http_request: Request
 ):
     """
     Ingest a document into the knowledge base.
@@ -599,6 +676,11 @@ async def ingest_document(
         # Generate unique thread ID for this ingestion workflow
         thread_id = f"ingest_{int(start_time.timestamp())}"
 
+        # Create graph builder with the specified collection name
+        collection_name = request.collection_name or "smart_second_brain"
+        graph_builder = create_graph_builder_with_collection(collection_name)
+        compiled_graph = graph_builder.build()
+
         # Create knowledge state for the ingestion workflow
         state = KnowledgeState(
             query_type="ingest",                           # Workflow type identifier
@@ -607,12 +689,6 @@ async def ingest_document(
             categories=request.categories or [],           # Document categories
             metadata=request.metadata or {}                # Additional metadata
         )
-
-        # Ensure compiled graph is available
-        compiled_graph = getattr(http_request.app.state, "compiled_graph", None)
-        if compiled_graph is None:
-            compiled_graph = graph_builder.build()
-            http_request.app.state.compiled_graph = compiled_graph
 
         # Execute the ingestion workflow with thread ID for tracking
         logger.info(f"🔄 Starting document ingestion workflow: {thread_id}")
@@ -644,8 +720,7 @@ async def ingest_document(
 @router.post("/query", response_model=WorkflowResponse)
 async def query_knowledge_base(
     request: QueryRequest,
-    http_request: Request,
-    graph_builder: MasterGraphBuilder = Depends(get_graph_builder)
+    http_request: Request
 ):
     """
     Query the knowledge base for answers using natural language.
@@ -681,6 +756,11 @@ async def query_knowledge_base(
         # Use provided thread ID or generate new one for conversation continuity
         thread_id = request.thread_id or f"query_{int(start_time.timestamp())}"
 
+        # Create graph builder with the specified collection name
+        collection_name = request.collection_name or "smart_second_brain"
+        graph_builder = create_graph_builder_with_collection(collection_name)
+        compiled_graph = graph_builder.build()
+
         # Create knowledge state for the query workflow
         # LangGraph checkpointer will handle conversation history automatically
         state = KnowledgeState(
@@ -691,12 +771,6 @@ async def query_knowledge_base(
             knowledge_type=request.knowledge_type,
             require_human_review=request.require_human_review
         )
-
-        # Ensure compiled graph is available
-        compiled_graph = getattr(http_request.app.state, "compiled_graph", None)
-        if compiled_graph is None:
-            compiled_graph = graph_builder.build()
-            http_request.app.state.compiled_graph = compiled_graph
 
         # Execute the query workflow with thread ID for context
         logger.info(f"🔍 Starting query workflow: {thread_id}")
@@ -973,8 +1047,7 @@ async def ingest_multiple_pdfs(
 @router.post("/feedback", response_model=FeedbackResponse)
 async def submit_feedback(
     request: FeedbackRequest,
-    http_request: Request,
-    graph_builder: MasterGraphBuilder = Depends(get_graph_builder)
+    http_request: Request
 ):
     """
     Submit human feedback on AI-generated answers.
@@ -1022,11 +1095,10 @@ async def submit_feedback(
         
         logger.info(f"📝 Processing feedback for thread {request.thread_id}: {request.feedback}")
         
-        # Get the compiled graph
-        compiled_graph = getattr(http_request.app.state, "compiled_graph", None)
-        if compiled_graph is None:
-            compiled_graph = graph_builder.build()
-            http_request.app.state.compiled_graph = compiled_graph
+        # Create graph builder with the specified collection name
+        collection_name = request.collection_name or "smart_second_brain"
+        graph_builder = create_graph_builder_with_collection(collection_name)
+        compiled_graph = graph_builder.build()
         
         # Create a new state with the feedback
         feedback_state = KnowledgeState(
@@ -1140,7 +1212,7 @@ async def submit_feedback(
 async def get_feedback_status(
     thread_id: str,
     http_request: Request,
-    graph_builder: MasterGraphBuilder = Depends(get_graph_builder)
+    collection_name: str = "smart_second_brain"
 ):
     """
     Get the current feedback status for a conversation thread.
@@ -1161,11 +1233,9 @@ async def get_feedback_status(
     try:
         logger.info(f"🔍 Checking feedback status for thread: {thread_id}")
         
-        # Get the compiled graph
-        compiled_graph = getattr(http_request.app.state, "compiled_graph", None)
-        if compiled_graph is None:
-            compiled_graph = graph_builder.build()
-            http_request.app.state.compiled_graph = compiled_graph
+        # Create graph builder with the specified collection name
+        graph_builder = create_graph_builder_with_collection(collection_name)
+        compiled_graph = graph_builder.build()
         
         # Try to get the current state from LangGraph checkpointing
         try:

@@ -65,7 +65,7 @@ class SmartDocumentRetriever:
         self,
         vectorstore: Chroma = None,
         embedding_model = None,
-        collection_name: str = "knowledge_base",
+        collection_name: str = "smart_second_brain",
         chromadb_dir: str = "./chroma_db"
     ):
         """

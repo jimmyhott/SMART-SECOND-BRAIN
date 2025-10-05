@@ -13,6 +13,7 @@ An intelligent knowledge management platform with AI-powered document processing
 - **Human-in-the-Loop (HITL)**: Feedback system for AI-generated answers with approval/rejection/editing
 - **Intelligent IDK Detection**: State-based "I don't know" response detection with knowledge input interface
 - **Thread-based Conversations**: SQLite-backed conversation memory for multi-turn conversations
+- **Configurable Collections**: Support for multiple ChromaDB collections with consistent naming across operations
 - **Streamlit Frontend**: Modern web interface with PDF and text ingestion, chat interface, and feedback system
 - **Comprehensive Testing**: 47 tests covering API endpoints, workflows, and integration scenarios
 - **Centralized Logging**: Project-level logging configuration with file and console output
@@ -325,7 +326,8 @@ Content-Type: application/json
   "document": "Your document content here...",
   "source": "webpage",
   "categories": ["research", "ai"],
-  "metadata": {"author": "John Doe", "date": "2024-01-01"}
+  "metadata": {"author": "John Doe", "date": "2024-01-01"},
+  "collection_name": "smart_second_brain"
 }
 ```
 
@@ -348,7 +350,8 @@ Content-Type: application/json
 
 {
   "query": "What are the main concepts discussed?",
-  "thread_id": "conversation_123"
+  "thread_id": "conversation_123",
+  "collection_name": "smart_second_brain"
 }
 ```
 
@@ -363,7 +366,8 @@ Content-Type: application/json
 {
   "query": "Please summarize the content",
   "knowledge_type": "reusable",            // conversational | reusable | verified
-  "require_human_review": true              // if omitted, inferred from knowledge_type
+  "require_human_review": true,             // if omitted, inferred from knowledge_type
+  "collection_name": "smart_second_brain"
 }
 ```
 
@@ -378,7 +382,8 @@ Content-Type: application/json
 {
   "thread_id": "query_1700000000",
   "feedback": "approved",                  // approved | rejected | edited
-  "knowledge_type": "reusable"            // controls storage policy
+  "knowledge_type": "reusable",           // controls storage policy
+  "collection_name": "smart_second_brain"
 }
 ```
 
@@ -392,7 +397,8 @@ Content-Type: application/json
   "thread_id": "query_1700000000",
   "feedback": "edited",
   "edits": "<your edited final answer>",
-  "knowledge_type": "reusable"
+  "knowledge_type": "reusable",
+  "collection_name": "smart_second_brain"
 }
 ```
 
@@ -410,19 +416,55 @@ Content-Type: application/json
   "thread_id": "<thread_id from query response>",
   "feedback": "approved" | "rejected" | "edited",
   "edits": "<required when feedback is 'edited'>",
-  "knowledge_type": "conversational" | "reusable" | "verified"
+  "knowledge_type": "conversational" | "reusable" | "verified",
+  "collection_name": "smart_second_brain"
 }
 ```
 
 #### **Get Feedback Status**
 ```http
-GET /smart-second-brain/api/v1/graph/feedback/{thread_id}
+GET /smart-second-brain/api/v1/graph/feedback/{thread_id}?collection_name=smart_second_brain
 ```
 
 #### **Clear Vector Database**
 ```http
 DELETE /smart-second-brain/api/v1/graph/clear-vector-db
 ```
+
+### Collection Configuration
+
+The system supports multiple ChromaDB collections for organizing different types of knowledge. All API endpoints accept a `collection_name` parameter to specify which collection to use.
+
+#### **Default Collection**
+- **Name**: `smart_second_brain`
+- **Purpose**: Default collection for general knowledge storage
+- **Usage**: Used automatically when no collection name is specified
+
+#### **Custom Collections**
+You can create and use custom collections for different purposes:
+
+```http
+POST /smart-second-brain/api/v1/graph/ingest
+Content-Type: application/json
+
+{
+  "document": "Research paper content...",
+  "source": "academic_papers",
+  "collection_name": "research_knowledge"
+}
+```
+
+#### **Collection Isolation**
+- Documents stored in one collection are not accessible from other collections
+- Each collection maintains its own vector embeddings and metadata
+- Query operations only search within the specified collection
+- Perfect for organizing knowledge by domain, project, or user
+
+#### **Frontend Configuration**
+The Streamlit frontend provides a sidebar configuration where you can:
+- Set the default collection name for all operations
+- Switch between collections during your session
+- Maintain consistent collection usage across all features
 
 ### API Response Format
 ```json

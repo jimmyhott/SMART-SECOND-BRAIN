@@ -14,6 +14,7 @@ A modern, clean web interface for the Smart Second Brain AI-powered knowledge ma
 - **Human-in-the-Loop Feedback** - Approve, reject, or edit AI-generated answers
 - **Smart IDK Interface** - Knowledge input when AI doesn't know something
 - **Thread Management** - SQLite-backed conversation history with unique thread IDs
+- **Collection Configuration** - Sidebar configuration for ChromaDB collection names
 - **Professional Styling** - Clean, responsive design with Bootstrap components
 
 ## Installation
@@ -36,6 +37,22 @@ streamlit run app.py --server.port 5173 --server.address 0.0.0.0
 ```
 
 The app will open in your browser at `http://localhost:5173`
+
+## Collection Configuration
+
+The frontend includes a sidebar configuration section where you can:
+
+- **Set Collection Name**: Specify which ChromaDB collection to use for all operations
+- **Default Collection**: `smart_second_brain` (used when no custom name is specified)
+- **Session Persistence**: Collection name is maintained throughout your session
+- **Consistent Usage**: All operations (ingestion, querying, feedback) use the same collection
+
+### Using Custom Collections
+
+1. **Set Collection Name**: Enter your desired collection name in the sidebar
+2. **All Operations**: Ingestion, querying, and feedback will use this collection
+3. **Isolation**: Documents in different collections are completely isolated
+4. **Organization**: Perfect for organizing knowledge by project, domain, or user
 
 ## Requirements
 

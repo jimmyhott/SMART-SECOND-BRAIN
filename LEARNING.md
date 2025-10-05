@@ -48,6 +48,8 @@ Frontend (Streamlit) ↔ API Gateway (FastAPI) ↔ AI Workflows (LangGraph) ↔ 
 
 **Key Concepts**:
 - **Embeddings**: Numerical representations of text meaning
+- **Collections**: Isolated storage spaces for different knowledge domains
+- **Collection Isolation**: Documents in different collections are completely separate
 - **Similarity Search**: Find documents by semantic meaning, not exact text
 - **Metadata Filtering**: Combine semantic search with structured filters
 
@@ -55,6 +57,8 @@ Frontend (Streamlit) ↔ API Gateway (FastAPI) ↔ AI Workflows (LangGraph) ↔ 
 - More accurate document retrieval
 - Handles synonyms and related concepts
 - Scales to large document collections
+- Collection isolation for different knowledge domains
+- Configurable collection names for flexible organization
 
 ### 4. **State-Based IDK Detection System**
 **Purpose**: Intelligently detect when AI responses indicate insufficient knowledge and provide appropriate user interfaces.
@@ -120,6 +124,8 @@ Frontend (Streamlit) ↔ API Gateway (FastAPI) ↔ AI Workflows (LangGraph) ↔ 
 - File upload and processing
 - Chat interface with conversation history
 - Human feedback collection
+- Collection configuration sidebar
+- Consistent collection usage across operations
 
 ## 🔧 Critical Components Deep Dive
 
@@ -228,6 +234,13 @@ User Query → Document Retrieval → Answer Generation → Human Review → Sto
 - **History Persistence**: Remember previous interactions (SQLite-backed via LangGraph)
 - **Context Awareness**: Use conversation history for better answers
 - **Session Management**: Handle multiple concurrent conversations
+
+### 6. **Collection Management**
+- **Multiple Collections**: Support for organizing knowledge by domain or project
+- **Collection Isolation**: Documents in different collections are completely separate
+- **Configurable Names**: All operations accept collection name parameters
+- **Consistent Usage**: Frontend ensures all operations use the same collection
+- **Default Collection**: `smart_second_brain` for general knowledge storage
 
 ## 🔄 Data Flow Architecture
 
@@ -346,6 +359,12 @@ Validation → State Modification → Resume Processing → Result Storage
 - **Vector Database Management**: Direct ChromaDB operations for development
 - **Backup & Recovery**: Data protection and restoration
 - **Environment Management**: Configuration and deployment automation
+
+### 6. **Collection Configuration & Management**
+- **API Parameter Design**: Collection name parameters across all endpoints
+- **Frontend State Management**: Session-based collection configuration
+- **Consistent Usage Patterns**: Ensuring all operations use the same collection
+- **Collection Isolation**: Understanding ChromaDB collection boundaries
 
 ## 🔮 Future Enhancement Opportunities
 

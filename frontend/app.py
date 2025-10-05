@@ -14,6 +14,8 @@ from streamlit_chat import message
 
 # Configuration
 API_BASE_URL = "http://localhost:8000"
+DEFAULT_COLLECTION_NAME = "smart_second_brain"  # Default collection name for all operations
+
 API_ENDPOINTS = {
     "health": f"{API_BASE_URL}/smart-second-brain/api/v1/graph/health",
     "ingest": f"{API_BASE_URL}/smart-second-brain/api/v1/graph/ingest",
@@ -219,13 +221,16 @@ def ingest_multiple_pdfs(uploaded_files: List, source: str, categories: str = ""
 def process_text_ingestion(content, source, categories=None, author=None, knowledge_type="reusable"):
     """Process text content ingestion using the /ingest endpoint"""
     try:
+        # Get collection name from session state
+        collection_name = st.session_state.get("collection_name", DEFAULT_COLLECTION_NAME)
+        
         # Prepare data for API request
         data = {
-            "content": content,
+            "document": content,  # Fixed field name to match API
             "source": source,
             "categories": categories,
-            "author": author,
-            "knowledge_type": knowledge_type
+            "metadata": {"author": author, "knowledge_type": knowledge_type},
+            "collection_name": collection_name
         }
         
         # Make API request
@@ -263,9 +268,13 @@ def query_knowledge(query: str, thread_id: str = None):
         return None
     
     try:
+        # Get collection name from session state
+        collection_name = st.session_state.get("collection_name", DEFAULT_COLLECTION_NAME)
+        
         data = {
             "query": query.strip(),
-            "thread_id": thread_id if thread_id else None
+            "thread_id": thread_id if thread_id else None,
+            "collection_name": collection_name
         }
         
         result = api_request(API_ENDPOINTS["query"], "POST", data)
@@ -330,12 +339,16 @@ def is_idk_response(response_text: str) -> bool:
 def submit_feedback(thread_id: str, feedback: str, edits: str = None, comment: str = None, knowledge_type: str = None):
     """Submit feedback for an AI-generated answer"""
     try:
+        # Get collection name from session state
+        collection_name = st.session_state.get("collection_name", DEFAULT_COLLECTION_NAME)
+        
         data = {
             "thread_id": thread_id,
             "feedback": feedback,
             "edits": edits,
             "comment": comment,
-            "knowledge_type": knowledge_type
+            "knowledge_type": knowledge_type,
+            "collection_name": collection_name
         }
         
         result = api_request(API_ENDPOINTS["feedback"], "POST", data)
@@ -357,13 +370,16 @@ def submit_feedback(thread_id: str, feedback: str, edits: str = None, comment: s
 def submit_knowledge(thread_id: str, user_knowledge: str, original_query: str):
     """Submit user-provided knowledge when AI doesn't know something"""
     try:
+        # Get collection name from session state
+        collection_name = st.session_state.get("collection_name", DEFAULT_COLLECTION_NAME)
+        
         # Use the ingest endpoint to store the knowledge
         data = {
             "document": user_knowledge,
             "source": f"User Knowledge for: {original_query}",
             "categories": ["user_provided"],
-            "author": "user",
-            "knowledge_type": "verified"
+            "metadata": {"author": "user", "knowledge_type": "verified"},
+            "collection_name": collection_name
         }
         
         result = api_request(API_ENDPOINTS["ingest"], "POST", data)
@@ -385,7 +401,10 @@ def submit_knowledge(thread_id: str, user_knowledge: str, original_query: str):
 def get_feedback_status(thread_id: str):
     """Get feedback status for a thread"""
     try:
-        endpoint = f"{API_ENDPOINTS['feedback_status']}/{thread_id}"
+        # Get collection name from session state
+        collection_name = st.session_state.get("collection_name", DEFAULT_COLLECTION_NAME)
+        
+        endpoint = f"{API_ENDPOINTS['feedback_status']}/{thread_id}?collection_name={collection_name}"
         result = api_request(endpoint, "GET")
         
         if "error" not in result:
@@ -423,6 +442,17 @@ def main():
             <h1 class="mb-0">Smart Second Brain</h1>
         </div>
         """, unsafe_allow_html=True)
+    
+    # Collection Configuration
+    st.sidebar.markdown("### 🔧 Configuration")
+    collection_name = st.sidebar.text_input(
+        "Collection Name",
+        value=DEFAULT_COLLECTION_NAME,
+        help="ChromaDB collection name for storing and retrieving documents"
+    )
+    
+    # Store collection name in session state
+    st.session_state.collection_name = collection_name or DEFAULT_COLLECTION_NAME
     
     # Health Status (Compact)
     check_system_health()

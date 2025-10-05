@@ -859,7 +859,7 @@ INSTRUCTIONS:
             
             # Use the temporary ChromaDB directory from the fixture
             vectorstore = Chroma(
-                collection_name="knowledge_base",
+                collection_name="smart_second_brain",
                 embedding_function=embeddings,
                 persist_directory=real_graph_builder.chromadb_dir
             )
@@ -951,7 +951,7 @@ INSTRUCTIONS:
             )
             # Use the temporary ChromaDB directory from the fixture
             vectorstore = Chroma(
-                collection_name="knowledge_base",
+                collection_name="smart_second_brain",
                 embedding_function=embeddings,
                 persist_directory=real_graph_builder.chromadb_dir
             )
@@ -1047,7 +1047,7 @@ INSTRUCTIONS:
             
             # Use the temporary ChromaDB directory from the fixture
             vectorstore = Chroma(
-                collection_name="knowledge_base",
+                collection_name="smart_second_brain",
                 embedding_function=embeddings,
                 persist_directory=real_graph_builder.chromadb_dir
             )
