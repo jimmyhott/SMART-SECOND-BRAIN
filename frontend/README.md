@@ -12,6 +12,7 @@ A modern, clean web interface for the Smart Second Brain AI-powered knowledge ma
 - **Real-time Processing** - Live progress updates and detailed processing results
 - **Advanced Chat Interface** - Modern chat UI with conversation threads and feedback system
 - **Human-in-the-Loop Feedback** - Approve, reject, or edit AI-generated answers
+- **Smart IDK Interface** - Knowledge input when AI doesn't know something
 - **Thread Management** - SQLite-backed conversation history with unique thread IDs
 - **Professional Styling** - Clean, responsive design with Bootstrap components
 
@@ -82,8 +83,18 @@ The chat interface includes a comprehensive feedback system:
 - **Approve**: Mark AI-generated answers as approved
 - **Reject**: Mark answers as rejected
 - **Edit**: Provide edited versions of AI answers
+- **Smart IDK Interface**: When AI doesn't know something, provide knowledge input instead of feedback
 - **Status Display**: Real-time feedback status for each message
 - **Thread Management**: Track feedback across conversation threads
+
+### IDK Response Handling
+
+When the AI indicates it doesn't know something (via `is_idk: true`):
+
+1. **Detection**: System automatically detects IDK responses using state properties
+2. **Knowledge Input**: Shows "Provide Knowledge" interface instead of standard feedback
+3. **Storage**: User-provided knowledge is stored in the vector database
+4. **Future Use**: Knowledge becomes available for future queries
 
 ## Conversation Management
 

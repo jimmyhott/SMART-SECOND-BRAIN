@@ -56,7 +56,28 @@ Frontend (Streamlit) ↔ API Gateway (FastAPI) ↔ AI Workflows (LangGraph) ↔ 
 - Handles synonyms and related concepts
 - Scales to large document collections
 
-### 4. **SQLite Checkpointing (LangGraph State Persistence)**
+### 4. **State-Based IDK Detection System**
+**Purpose**: Intelligently detect when AI responses indicate insufficient knowledge and provide appropriate user interfaces.
+
+**Key Features**:
+- **JSON Response Format**: LLM returns structured responses with answer, is_idk, and confidence
+- **Frontend Parsing**: Client-side JSON parsing for better control and debugging
+- **Conditional UI**: Different interfaces for IDK vs regular responses
+- **Knowledge Input**: Direct knowledge provision when AI doesn't know
+
+**Implementation Flow**:
+1. LLM generates JSON response with confidence assessment
+2. Frontend parses JSON to extract answer and metadata
+3. UI shows knowledge input interface for IDK responses
+4. User provides knowledge → stored in vector database
+
+**Benefits**:
+- Eliminates fragile text pattern matching
+- Provides explicit confidence indicators
+- Better user experience for knowledge gaps
+- More reliable and maintainable system
+
+### 5. **SQLite Checkpointing (LangGraph State Persistence)**
 **Purpose**: Persist workflow state for resumable operations and conversation continuity.
 
 **Key Features**:
@@ -72,7 +93,7 @@ Frontend (Streamlit) ↔ API Gateway (FastAPI) ↔ AI Workflows (LangGraph) ↔ 
 - Enable conversation continuity across API calls
 - Support human-in-the-loop workflow interruptions
 
-### 5. **FastAPI - Modern Python Web Framework**
+### 6. **FastAPI - Modern Python Web Framework**
 **Purpose**: High-performance API framework with automatic documentation and type safety.
 
 **Key Features Used**:
@@ -86,7 +107,7 @@ Frontend (Streamlit) ↔ API Gateway (FastAPI) ↔ AI Workflows (LangGraph) ↔ 
 - **Middleware Integration**: Request/response processing
 - **State Management**: Application-level state via `app.state`
 
-### 6. **Streamlit - Rapid Web App Development**
+### 7. **Streamlit - Rapid Web App Development**
 **Purpose**: Build interactive web applications with minimal frontend code.
 
 **Key Patterns**:

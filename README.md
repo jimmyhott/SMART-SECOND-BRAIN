@@ -11,6 +11,7 @@ An intelligent knowledge management platform with AI-powered document processing
 - **Azure OpenAI Integration**: Full support for Azure OpenAI with automatic deployment detection
 - **Smart Query Processing**: RAG (Retrieval-Augmented Generation) for intelligent question answering
 - **Human-in-the-Loop (HITL)**: Feedback system for AI-generated answers with approval/rejection/editing
+- **Intelligent IDK Detection**: State-based "I don't know" response detection with knowledge input interface
 - **Thread-based Conversations**: SQLite-backed conversation memory for multi-turn conversations
 - **Streamlit Frontend**: Modern web interface with PDF and text ingestion, chat interface, and feedback system
 - **Comprehensive Testing**: 47 tests covering API endpoints, workflows, and integration scenarios
@@ -145,6 +146,7 @@ streamlit run app.py --server.port 5173 --server.address 0.0.0.0
 - 🔍 **Knowledge Query** - Natural language search interface with conversation memory
 - 💬 **Thread-based Conversations** - SQLite-backed conversation history with thread management
 - 👍 **Human Feedback System** - Approve, reject, or edit AI-generated answers
+- 🤔 **Smart IDK Interface** - Knowledge input when AI doesn't know something
 - 📊 **Status Monitoring** - Live updates and component health
 - 🎨 **Modern UI** - Clean, responsive interface built with Streamlit
 
