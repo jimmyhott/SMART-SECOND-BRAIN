@@ -339,6 +339,14 @@ def get_feedback_status(thread_id: str):
     except Exception as e:
         return None
 
+def get_base64_image(image_path):
+    """Convert image to base64 for embedding in HTML"""
+    try:
+        with open(image_path, 'rb') as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except Exception as e:
+        return None
+
 # Main App
 def main():
     # Header
@@ -347,7 +355,7 @@ def main():
         <img src="data:image/jpeg;base64,{}" class="header-icon" width="60" height="60" style="border-radius: 50%;">
         <h1 class="mb-0">Smart Second Brain</h1>
     </div>
-    """.format(get_base64_image("second-brain.jpeg")), unsafe_allow_html=True)
+    """.format(get_base64_image("../second-brain.jpeg")), unsafe_allow_html=True)
     
     # Health Status (Compact)
     check_system_health()
