@@ -4,13 +4,9 @@ Smart Second Brain - Streamlit Frontend
 A modern web interface for AI-powered knowledge management
 """
 
-import asyncio
 import json
-import time
-import base64
 from datetime import datetime
 from typing import Dict, List, Optional
-import io
 
 import streamlit as st
 import requests
@@ -57,10 +53,6 @@ st.markdown("""
     .status-healthy { background: #28a745; }
     .status-error { background: #dc3545; }
     .status-warning { background: #ffc107; }
-    .header-icon {
-        vertical-align: middle;
-        margin-right: 10px;
-    }
     .chat-message {
         padding: 0.75rem 1rem;
         border-radius: 18px;
@@ -336,14 +328,6 @@ def get_feedback_status(thread_id: str):
         else:
             return None
             
-    except Exception as e:
-        return None
-
-def get_base64_image(image_path):
-    """Convert image to base64 for embedding in HTML"""
-    try:
-        with open(image_path, 'rb') as img_file:
-            return base64.b64encode(img_file.read()).decode()
     except Exception as e:
         return None
 
