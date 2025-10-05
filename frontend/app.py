@@ -597,23 +597,23 @@ def main():
                             col1, col2, col3, col4 = st.columns([0.2, 0.2, 0.2, 0.4])
                             
                             with col1:
-                                if st.button("👍 Approve", key=f"approve_{idx}", help="Mark this answer as approved"):
+                                if st.button("👍 Approve", key=f"approve_{i}", help="Mark this answer as approved"):
                                     if submit_feedback(chat.get("thread_id", ""), "approved"):
-                                        st.session_state.chat_history[idx]["feedback_status"] = "approved"
+                                        st.session_state.chat_history[i]["feedback_status"] = "approved"
                                         st.success("Answer approved!")
                                         st.rerun()
                             
                             with col2:
-                                if st.button("👎 Reject", key=f"reject_{idx}", help="Mark this answer as rejected"):
+                                if st.button("👎 Reject", key=f"reject_{i}", help="Mark this answer as rejected"):
                                     if submit_feedback(chat.get("thread_id", ""), "rejected"):
-                                        st.session_state.chat_history[idx]["feedback_status"] = "rejected"
+                                        st.session_state.chat_history[i]["feedback_status"] = "rejected"
                                         st.success("Answer rejected!")
                                         st.rerun()
                             
                             with col3:
-                                if st.button("✏️ Edit", key=f"edit_{idx}", help="Provide edited version"):
+                                if st.button("✏️ Edit", key=f"edit_{i}", help="Provide edited version"):
                                     # Store the message index for editing
-                                    st.session_state[f"editing_message_{idx}"] = True
+                                    st.session_state[f"editing_message_{i}"] = True
                                     st.rerun()
                             
                             with col4:
@@ -629,28 +629,28 @@ def main():
                                     st.info("⏳ Pending feedback")
                             
                             # Show edit interface if editing
-                            if st.session_state.get(f"editing_message_{idx}", False):
+                            if st.session_state.get(f"editing_message_{i}", False):
                                 st.markdown("**Edit the answer:**")
                                 edited_content = st.text_area(
                                     "Edited answer:",
                                     value=chat["content"],
-                                    key=f"edit_content_{idx}",
+                                    key=f"edit_content_{i}",
                                     height=100
                                 )
                                 
                                 col_edit1, col_edit2 = st.columns([0.3, 0.7])
                                 with col_edit1:
-                                    if st.button("Submit Edit", key=f"submit_edit_{idx}"):
+                                    if st.button("Submit Edit", key=f"submit_edit_{i}"):
                                         if submit_feedback(chat.get("thread_id", ""), "edited", edits=edited_content):
-                                            st.session_state.chat_history[idx]["content"] = edited_content
-                                            st.session_state.chat_history[idx]["feedback_status"] = "edited"
-                                            st.session_state[f"editing_message_{idx}"] = False
+                                            st.session_state.chat_history[i]["content"] = edited_content
+                                            st.session_state.chat_history[i]["feedback_status"] = "edited"
+                                            st.session_state[f"editing_message_{i}"] = False
                                             st.success("Answer updated!")
                                             st.rerun()
                                 
                                 with col_edit2:
-                                    if st.button("Cancel", key=f"cancel_edit_{idx}"):
-                                        st.session_state[f"editing_message_{idx}"] = False
+                                    if st.button("Cancel", key=f"cancel_edit_{i}"):
+                                        st.session_state[f"editing_message_{i}"] = False
                                         st.rerun()
         
         # New Thread button (outside form)
