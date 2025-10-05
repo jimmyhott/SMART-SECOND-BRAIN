@@ -561,6 +561,7 @@ async def extract_pdf_text(file: UploadFile) -> str:
 @router.post("/ingest", response_model=WorkflowResponse)
 async def ingest_document(
     request: IngestRequest,
+    http_request: Request,
     graph_builder: MasterGraphBuilder = Depends(get_graph_builder)
 ):
     """
@@ -609,9 +610,10 @@ async def ingest_document(
         )
 
         # Ensure compiled graph is available
-        global compiled_graph
+        compiled_graph = getattr(http_request.app.state, "compiled_graph", None)
         if compiled_graph is None:
             compiled_graph = graph_builder.build()
+            http_request.app.state.compiled_graph = compiled_graph
 
         # Execute the ingestion workflow with thread ID for tracking
         logger.info(f"🔄 Starting document ingestion workflow: {thread_id}")
@@ -643,6 +645,7 @@ async def ingest_document(
 @router.post("/query", response_model=WorkflowResponse)
 async def query_knowledge_base(
     request: QueryRequest,
+    http_request: Request,
     graph_builder: MasterGraphBuilder = Depends(get_graph_builder)
 ):
     """
@@ -693,9 +696,10 @@ async def query_knowledge_base(
         )
 
         # Ensure compiled graph is available
-        global compiled_graph
+        compiled_graph = getattr(http_request.app.state, "compiled_graph", None)
         if compiled_graph is None:
             compiled_graph = graph_builder.build()
+            http_request.app.state.compiled_graph = compiled_graph
 
         # Execute the query workflow with thread ID for context
         logger.info(f"🔍 Starting query workflow: {thread_id}")
@@ -730,7 +734,7 @@ async def query_knowledge_base(
 
 
 @router.get("/health", response_model=HealthResponse)
-async def health_check(graph_builder: MasterGraphBuilder = Depends(get_graph_builder)):
+async def health_check(request: Request):
     """
     Check the health status of the graph system and its components.
     
@@ -750,23 +754,23 @@ async def health_check(graph_builder: MasterGraphBuilder = Depends(get_graph_bui
         load balancers to determine service availability.
     """
     try:
-        global compiled_graph
-
         # =============================================================================
         # COMPONENT HEALTH CHECKS
         # =============================================================================
         
         # Check if the compiled workflow is available
+        compiled_graph = getattr(request.app.state, "compiled_graph", None)
         graph_ready = compiled_graph is not None
         
         # Check if the vector store is accessible
-        vectorstore_ready = graph_builder.vectorstore is not None
+        graph_builder = getattr(request.app.state, "graph_builder", None)
+        vectorstore_ready = graph_builder is not None and graph_builder.vectorstore is not None
         
         # Check if the embedding model is loaded
-        embedding_ready = graph_builder.embedding_model is not None
+        embedding_ready = graph_builder is not None and graph_builder.embedding_model is not None
         
         # Check if the language model is available
-        llm_ready = graph_builder.llm is not None
+        llm_ready = graph_builder is not None and graph_builder.llm is not None
 
         # =============================================================================
         # OVERALL STATUS DETERMINATION
@@ -804,6 +808,7 @@ async def health_check(graph_builder: MasterGraphBuilder = Depends(get_graph_bui
 
 @router.post("/ingest-pdfs", response_model=MultiIngestResponse)
 async def ingest_multiple_pdfs(
+    http_request: Request,
     files: List[UploadFile] = File(...),
     source: str = Form(...),
     categories: Optional[str] = Form(None),
@@ -878,9 +883,10 @@ async def ingest_multiple_pdfs(
     failed_count = 0
     
     # Ensure compiled graph is available
-    global compiled_graph
+    compiled_graph = getattr(http_request.app.state, "compiled_graph", None)
     if compiled_graph is None:
         compiled_graph = graph_builder.build()
+        http_request.app.state.compiled_graph = compiled_graph
     
     logger.info(f"🔄 Starting batch PDF ingestion: {len(files)} files")
     
@@ -972,6 +978,7 @@ async def ingest_multiple_pdfs(
 @router.post("/feedback", response_model=FeedbackResponse)
 async def submit_feedback(
     request: FeedbackRequest,
+    http_request: Request,
     graph_builder: MasterGraphBuilder = Depends(get_graph_builder)
 ):
     """
@@ -1021,9 +1028,10 @@ async def submit_feedback(
         logger.info(f"📝 Processing feedback for thread {request.thread_id}: {request.feedback}")
         
         # Get the compiled graph
-        global compiled_graph
+        compiled_graph = getattr(http_request.app.state, "compiled_graph", None)
         if compiled_graph is None:
             compiled_graph = graph_builder.build()
+            http_request.app.state.compiled_graph = compiled_graph
         
         # Create a new state with the feedback
         feedback_state = KnowledgeState(
@@ -1136,6 +1144,7 @@ async def submit_feedback(
 @router.get("/feedback/{thread_id}", response_model=FeedbackStatusResponse)
 async def get_feedback_status(
     thread_id: str,
+    http_request: Request,
     graph_builder: MasterGraphBuilder = Depends(get_graph_builder)
 ):
     """
@@ -1158,9 +1167,10 @@ async def get_feedback_status(
         logger.info(f"🔍 Checking feedback status for thread: {thread_id}")
         
         # Get the compiled graph
-        global compiled_graph
+        compiled_graph = getattr(http_request.app.state, "compiled_graph", None)
         if compiled_graph is None:
             compiled_graph = graph_builder.build()
+            http_request.app.state.compiled_graph = compiled_graph
         
         # Try to get the current state from LangGraph checkpointing
         try:

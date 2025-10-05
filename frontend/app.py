@@ -23,6 +23,8 @@ API_ENDPOINTS = {
     "ingest": f"{API_BASE_URL}/smart-second-brain/api/v1/graph/ingest",
     "ingest_pdfs": f"{API_BASE_URL}/smart-second-brain/api/v1/graph/ingest-pdfs",
     "query": f"{API_BASE_URL}/smart-second-brain/api/v1/graph/query",
+    "feedback": f"{API_BASE_URL}/smart-second-brain/api/v1/graph/feedback",
+    "feedback_status": f"{API_BASE_URL}/smart-second-brain/api/v1/graph/feedback",
 }
 
 # Page configuration
@@ -117,6 +119,8 @@ if 'current_thread_id' not in st.session_state:
     st.session_state.current_thread_id = None
 if 'new_thread_clicked' not in st.session_state:
     st.session_state.new_thread_clicked = False
+if 'pending_feedback' not in st.session_state:
+    st.session_state.pending_feedback = {}
 
 # API Functions
 def api_request(endpoint: str, method: str = "GET", data: Optional[Dict] = None, files: Optional[Dict] = None) -> Dict:
@@ -216,6 +220,46 @@ def ingest_multiple_pdfs(uploaded_files: List, source: str, categories: str = ""
         st.error(f"Error: {str(e)}")
         return False
 
+def process_text_ingestion(content, source, categories=None, author=None, knowledge_type="reusable"):
+    """Process text content ingestion using the /ingest endpoint"""
+    try:
+        # Prepare data for API request
+        data = {
+            "content": content,
+            "source": source,
+            "categories": categories,
+            "author": author,
+            "knowledge_type": knowledge_type
+        }
+        
+        # Make API request
+        result = api_request(API_ENDPOINTS["ingest"], "POST", data)
+        
+        if "error" not in result:
+            # Display success message with details
+            chunks_created = result.get("chunks_created", 0)
+            execution_time = result.get("execution_time", 0)
+            
+            st.success(f"✅ Text content processed successfully! {chunks_created} chunks created in {execution_time:.2f}s")
+            
+            # Show detailed results
+            if result.get("details"):
+                with st.expander("📊 Processing Details", expanded=False):
+                    details = result["details"]
+                    st.write(f"**Content Length:** {details.get('content_length', 0)} characters")
+                    st.write(f"**Chunks Created:** {details.get('chunks_created', 0)}")
+                    st.write(f"**Vector Storage:** {'✅ Stored' if details.get('vector_stored', False) else '⏭️ Skipped'}")
+                    st.write(f"**Knowledge Type:** {details.get('knowledge_type', 'unknown')}")
+            
+            return True
+        else:
+            st.error(f"Error processing text content: {result['error']}")
+            return False
+            
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+        return False
+
 def query_knowledge(query: str, thread_id: str = None):
     """Query the knowledge base"""
     if not query.strip():
@@ -243,6 +287,52 @@ def query_knowledge(query: str, thread_id: str = None):
             
     except Exception as e:
         st.error(f"Error: {str(e)}")
+        return None
+
+def submit_feedback(thread_id: str, feedback: str, edits: str = None, comment: str = None, knowledge_type: str = None):
+    """Submit feedback for an AI-generated answer"""
+    try:
+        data = {
+            "thread_id": thread_id,
+            "feedback": feedback,
+            "edits": edits,
+            "comment": comment,
+            "knowledge_type": knowledge_type
+        }
+        
+        result = api_request(API_ENDPOINTS["feedback"], "POST", data)
+        
+        if "error" not in result:
+            return {
+                "success": result.get("success", False),
+                "message": result.get("message", "Feedback submitted"),
+                "action_taken": result.get("action_taken", "unknown")
+            }
+        else:
+            st.error(f"Error submitting feedback: {result['error']}")
+            return None
+            
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+        return None
+
+def get_feedback_status(thread_id: str):
+    """Get feedback status for a thread"""
+    try:
+        endpoint = f"{API_ENDPOINTS['feedback_status']}/{thread_id}"
+        result = api_request(endpoint, "GET")
+        
+        if "error" not in result:
+            return {
+                "status": result.get("status", "unknown"),
+                "has_pending_feedback": result.get("has_pending_feedback", False),
+                "current_answer": result.get("current_answer"),
+                "feedback_history": result.get("feedback_history", [])
+            }
+        else:
+            return None
+            
+    except Exception as e:
         return None
 
 # Main App
@@ -292,7 +382,7 @@ def main():
     """, unsafe_allow_html=True)
     
     # Tabs
-    tab1, tab2 = st.tabs(["📄 Document Ingestion", "💬 Chat with Knowledge Base"])
+    tab1, tab2, tab3 = st.tabs(["📄 PDF Ingestion", "📝 Text Ingestion", "💬 Chat with Knowledge Base"])
     
     with tab1:
         st.markdown("### Upload and Process Documents")
@@ -398,6 +488,74 @@ def main():
                             st.rerun()
     
     with tab2:
+        st.markdown("### Text Content Ingestion")
+        
+        st.markdown("#### 📝 Enter Text Content")
+        
+        # Text input area
+        text_content = st.text_area(
+            "Enter text content to ingest:",
+            placeholder="Paste or type text content here...",
+            height=200,
+            help="Enter any text content that you want to add to the knowledge base"
+        )
+        
+        # Text metadata form
+        st.markdown("**Text Content Metadata:**")
+        
+        # Create columns for the form fields
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            text_source = st.text_input(
+                "Source *", 
+                placeholder="e.g., manual, notes, article, documentation", 
+                key="text_source",
+                help="Required: Source identifier for this text content"
+            )
+            text_categories = st.text_input(
+                "Categories (comma-separated)", 
+                placeholder="e.g., ai, research, tutorial, legal", 
+                key="text_categories",
+                help="Optional: Categories to tag this text content"
+            )
+        
+        with col2:
+            text_author = st.text_input(
+                "Author", 
+                placeholder="e.g., John Doe, OpenAI, Company Name", 
+                key="text_author",
+                help="Optional: Author or creator of the content"
+            )
+            text_knowledge_type = st.selectbox(
+                "Knowledge Type",
+                ["reusable", "verified", "temporary"],
+                key="text_knowledge_type",
+                help="Type of knowledge: reusable (long-term), verified (validated), temporary (short-term)"
+            )
+        
+        # Process button
+        if st.button("🚀 Process Text Content", key="process_text"):
+            if not text_content.strip():
+                st.error("❌ Please enter some text content to process.")
+            elif not text_source.strip():
+                st.error("❌ Please provide a source for the text content.")
+            else:
+                # Show processing status
+                with st.spinner("🔄 Processing text content..."):
+                    success = process_text_ingestion(
+                        text_content,
+                        text_source,
+                        text_categories,
+                        text_author,
+                        text_knowledge_type
+                    )
+                    
+                    if success:
+                        st.success("✅ Text content processed successfully!")
+                        st.rerun()
+    
+    with tab3:
         st.markdown("### Chat with Your Knowledge Base")
         
         # Thread ID display
@@ -434,6 +592,69 @@ def main():
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
+                    
+                    # Add feedback interface for assistant messages
+                    if not chat.get("error", False):
+                        with st.container():
+                            st.markdown("---")
+                            col1, col2, col3, col4 = st.columns([0.2, 0.2, 0.2, 0.4])
+                            
+                            with col1:
+                                if st.button("👍 Approve", key=f"approve_{idx}", help="Mark this answer as approved"):
+                                    if submit_feedback(chat.get("thread_id", ""), "approved"):
+                                        st.session_state.chat_history[idx]["feedback_status"] = "approved"
+                                        st.success("Answer approved!")
+                                        st.rerun()
+                            
+                            with col2:
+                                if st.button("👎 Reject", key=f"reject_{idx}", help="Mark this answer as rejected"):
+                                    if submit_feedback(chat.get("thread_id", ""), "rejected"):
+                                        st.session_state.chat_history[idx]["feedback_status"] = "rejected"
+                                        st.success("Answer rejected!")
+                                        st.rerun()
+                            
+                            with col3:
+                                if st.button("✏️ Edit", key=f"edit_{idx}", help="Provide edited version"):
+                                    # Store the message index for editing
+                                    st.session_state[f"editing_message_{idx}"] = True
+                                    st.rerun()
+                            
+                            with col4:
+                                # Show current feedback status
+                                feedback_status = chat.get("feedback_status", "pending")
+                                if feedback_status == "approved":
+                                    st.success("✅ Approved")
+                                elif feedback_status == "rejected":
+                                    st.error("❌ Rejected")
+                                elif feedback_status == "edited":
+                                    st.info("✏️ Edited")
+                                else:
+                                    st.info("⏳ Pending feedback")
+                            
+                            # Show edit interface if editing
+                            if st.session_state.get(f"editing_message_{idx}", False):
+                                st.markdown("**Edit the answer:**")
+                                edited_content = st.text_area(
+                                    "Edited answer:",
+                                    value=chat["content"],
+                                    key=f"edit_content_{idx}",
+                                    height=100
+                                )
+                                
+                                col_edit1, col_edit2 = st.columns([0.3, 0.7])
+                                with col_edit1:
+                                    if st.button("Submit Edit", key=f"submit_edit_{idx}"):
+                                        if submit_feedback(chat.get("thread_id", ""), "edited", edits=edited_content):
+                                            st.session_state.chat_history[idx]["content"] = edited_content
+                                            st.session_state.chat_history[idx]["feedback_status"] = "edited"
+                                            st.session_state[f"editing_message_{idx}"] = False
+                                            st.success("Answer updated!")
+                                            st.rerun()
+                                
+                                with col_edit2:
+                                    if st.button("Cancel", key=f"cancel_edit_{idx}"):
+                                        st.session_state[f"editing_message_{idx}"] = False
+                                        st.rerun()
         
         # New Thread button (outside form)
         col_new_thread, col_spacer = st.columns([1, 4])
@@ -505,7 +726,8 @@ def main():
                         "timestamp": datetime.now().strftime("%H:%M:%S"),
                         "execution_time": result["execution_time"],
                         "retrieved_docs": result["retrieved_docs"],
-                        "thread_id": result.get("thread_id", "unknown")
+                        "thread_id": result.get("thread_id", "unknown"),
+                        "feedback_status": "pending"  # Mark as pending feedback
                     })
                 else:
                     # Add error message

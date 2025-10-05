@@ -4,14 +4,16 @@ A modern, clean web interface for the Smart Second Brain AI-powered knowledge ma
 
 ## Features
 
-- **Compact Health Monitoring** - Tiny status bar showing system health
-- **Tabbed Interface** - Separate tabs for document ingestion and querying
+- **System Health Dashboard** - Real-time status monitoring of Graph, Vectorstore, and AI components
+- **Three-Tab Interface** - PDF Ingestion, Text Ingestion, and Chat with Knowledge Base
 - **Multiple PDF Upload** - Drag-and-drop support for multiple PDF files with batch processing
-- **Batch Metadata** - Add source, categories, author, and custom metadata for PDF batches
+- **Text Content Ingestion** - Direct text input with categorization and knowledge type selection
+- **Batch Metadata** - Add source, categories, author, and custom metadata for document batches
 - **Real-time Processing** - Live progress updates and detailed processing results
-- **Chatbot Interface** - Modern chat UI for querying the knowledge base
-- **Bootstrap Styling** - Professional, responsive design
-- **Real-time Updates** - Live chat and status updates
+- **Advanced Chat Interface** - Modern chat UI with conversation threads and feedback system
+- **Human-in-the-Loop Feedback** - Approve, reject, or edit AI-generated answers
+- **Thread Management** - Redis-backed conversation history with unique thread IDs
+- **Professional Styling** - Clean, responsive design with Bootstrap components
 
 ## Installation
 
@@ -29,10 +31,10 @@ pip install -e ".[dev]"
 ## Usage
 
 ```bash
-streamlit run app.py
+streamlit run app.py --server.port 5173 --server.address 0.0.0.0
 ```
 
-The app will open in your browser at `http://localhost:8501`
+The app will open in your browser at `http://localhost:5173`
 
 ## Requirements
 
@@ -44,11 +46,15 @@ The app will open in your browser at `http://localhost:8501`
 
 The frontend connects to:
 - Health Check: `http://localhost:8000/smart-second-brain/api/v1/graph/health`
-- Document Ingestion: `http://localhost:8000/smart-second-brain/api/v1/graph/ingest`
+- Text Document Ingestion: `http://localhost:8000/smart-second-brain/api/v1/graph/ingest`
 - Multiple PDF Ingestion: `http://localhost:8000/smart-second-brain/api/v1/graph/ingest-pdfs`
 - Knowledge Query: `http://localhost:8000/smart-second-brain/api/v1/graph/query`
+- Submit Feedback: `http://localhost:8000/smart-second-brain/api/v1/graph/feedback`
+- Get Feedback Status: `http://localhost:8000/smart-second-brain/api/v1/graph/feedback/{thread_id}`
 
-## PDF Batch Processing
+## Document Processing
+
+### PDF Batch Processing
 
 The frontend supports uploading multiple PDF files with batch metadata:
 
@@ -58,3 +64,30 @@ The frontend supports uploading multiple PDF files with batch metadata:
 - **Additional Metadata**: Optional JSON metadata for custom fields
 
 All PDFs in a batch will be processed together with the same metadata applied to each document.
+
+### Text Content Processing
+
+The frontend also supports direct text content ingestion:
+
+- **Text Input**: Large text area for pasting or typing content
+- **Source**: Required source identifier for the text content
+- **Categories**: Optional comma-separated categories for tagging
+- **Author**: Optional author information
+- **Knowledge Type**: Selection between "reusable", "verified", or "temporary"
+
+## Human-in-the-Loop Feedback
+
+The chat interface includes a comprehensive feedback system:
+
+- **Approve**: Mark AI-generated answers as approved
+- **Reject**: Mark answers as rejected
+- **Edit**: Provide edited versions of AI answers
+- **Status Display**: Real-time feedback status for each message
+- **Thread Management**: Track feedback across conversation threads
+
+## Conversation Management
+
+- **Thread-based Conversations**: Each conversation has a unique thread ID
+- **Conversation History**: Redis-backed persistence of chat history
+- **Message Types**: User messages, assistant responses, and system messages
+- **Feedback Integration**: Seamless integration between chat and feedback systems

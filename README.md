@@ -4,16 +4,18 @@ An intelligent knowledge management platform with AI-powered document processing
 
 ## 🚀 Features
 
-- **FastAPI Backend**: High-performance REST API with automatic documentation
+- **FastAPI Backend**: High-performance REST API with automatic documentation and health monitoring
 - **LangGraph Integration**: Advanced AI workflows for document processing and knowledge extraction
 - **AI-Powered Knowledge Management**: Intelligent document ingestion, chunking, and embedding
 - **Semantic Search**: Vector-based retrieval using ChromaDB for accurate document search
 - **Azure OpenAI Integration**: Full support for Azure OpenAI with automatic deployment detection
 - **Smart Query Processing**: RAG (Retrieval-Augmented Generation) for intelligent question answering
+- **Human-in-the-Loop (HITL)**: Feedback system for AI-generated answers with approval/rejection/editing
 - **Thread-based Conversations**: Redis-backed conversation memory for multi-turn conversations
-- **Modern Python**: Pathlib for cross-platform path handling, type hints, and async programming
-- **Comprehensive Testing**: Unit tests with mocked components and integration tests with real APIs
+- **Streamlit Frontend**: Modern web interface with PDF and text ingestion, chat interface, and feedback system
+- **Comprehensive Testing**: 47 tests covering API endpoints, workflows, and integration scenarios
 - **Centralized Logging**: Project-level logging configuration with file and console output
+- **Automated Startup**: Shell scripts for easy system management with health monitoring
 
 ## 📋 Requirements
 
@@ -145,10 +147,12 @@ streamlit run app.py --server.port 5173 --server.address 0.0.0.0
 ```
 
 **Frontend Features:**
-- 🏥 **System Health Dashboard** - Real-time status of all components
-- 📄 **Document Ingestion** - Easy PDF upload and processing
+- 🏥 **System Health Dashboard** - Real-time status of all components (Graph, Vectorstore, AI models)
+- 📄 **PDF Ingestion** - Multi-file PDF upload with batch processing and metadata
+- 📝 **Text Ingestion** - Direct text content input with categorization and knowledge type selection
 - 🔍 **Knowledge Query** - Natural language search interface with conversation memory
-- 💬 **Thread-based Conversations** - Redis-backed conversation history
+- 💬 **Thread-based Conversations** - Redis-backed conversation history with thread management
+- 👍 **Human Feedback System** - Approve, reject, or edit AI-generated answers
 - 📊 **Status Monitoring** - Live updates and component health
 - 🎨 **Modern UI** - Clean, responsive interface built with Streamlit
 
@@ -169,7 +173,7 @@ SMART-SECOND-BRAIN/
 │       ├── __init__.py            # Routes package initialization
 │       └── v1/                    # API version 1 endpoints
 │           ├── __init__.py        # V1 package initialization
-│           ├── graph_api.py       # LangGraph integration endpoints (/ingest, /query, /health)
+│           ├── graph_api.py       # LangGraph integration endpoints (/ingest, /ingest-pdfs, /query, /health, /feedback)
 │           ├── auth.py            # Authentication endpoints (future)
 │           ├── crypto.py          # Cryptocurrency endpoints (future)
 │           ├── portfolio.py       # Portfolio management endpoints (future)
@@ -180,7 +184,8 @@ SMART-SECOND-BRAIN/
 │   │   ├── knowledge_state.py     # LangGraph state management and data structures
 │   │   └── __pycache__/           # Python bytecode cache
 │   ├── data/                      # Agent data storage and persistence (future)
-│   ├── prompts/                   # AI prompt templates and configurations (future)
+│   ├── prompts/                   # AI prompt templates and configurations
+│   │   └── answer_prompt.txt      # Answer generation prompt template
 │   ├── schemas/                   # Data schemas and validation models (future)
 │   ├── secrets/                   # Secure credential management (future)
 │   └── workflows/                 # LangGraph workflow definitions
@@ -201,9 +206,12 @@ SMART-SECOND-BRAIN/
 │   ├── __init__.py                # Test package initialization
 │   ├── conftest.py                # Test configuration, fixtures, and setup
 │   ├── test_api/                  # API endpoint tests
+│   │   ├── __init__.py            # API test package initialization
+│   │   └── test_graph_api.py      # Graph API endpoint tests (47 tests total)
 │   ├── test_services/             # Service and workflow tests
 │   │   ├── test_master_graph_builder.py # AI workflow integration tests
-│   │   └── test_document_retriever.py   # Document retrieval tests
+│   │   ├── test_document_retriever.py   # Document retrieval tests
+│   │   └── README.md              # Test documentation
 │   └── test_utils/                # Utility function tests
 ├── infrastructure/                 # Infrastructure and deployment (future)
 ├── alembic/                       # Database migration system (future)
@@ -230,26 +238,26 @@ SMART-SECOND-BRAIN/
 
 ### Running Tests
 ```bash
-# Run all tests
-pytest
-
-# Run unit tests only (mocked components)
-pytest -m unit
-
-# Run integration tests only (real APIs)
-pytest -m integration
+# Run all tests (47 tests total)
+pytest tests/ -v
 
 # Run with coverage
 pytest --cov=api --cov=agentic --cov=shared --cov-report=html
 
 # Run specific test file
-pytest tests/test_services/test_master_graph_builder.py
+pytest tests/test_services/test_master_graph_builder.py -v
 
-# Run API tests
-pytest tests/test_api/
+# Run API tests (7 tests)
+pytest tests/test_api/ -v
 
-# Run service tests
-pytest tests/test_services/
+# Run service tests (40 tests)
+pytest tests/test_services/ -v
+
+# Run specific test class
+pytest tests/test_api/test_graph_api.py::TestGraphAPI -v
+
+# Run with detailed output
+pytest tests/ -v --tb=long
 ```
 
 ### Code Formatting
@@ -295,7 +303,7 @@ Once the server is running, visit:
 
 ### Core API Endpoints
 
-#### **Document Ingestion**
+#### **Text Document Ingestion**
 ```http
 POST /smart-second-brain/api/v1/graph/ingest
 Content-Type: application/json
@@ -306,6 +314,18 @@ Content-Type: application/json
   "categories": ["research", "ai"],
   "metadata": {"author": "John Doe", "date": "2024-01-01"}
 }
+```
+
+#### **Multiple PDF Ingestion**
+```http
+POST /smart-second-brain/api/v1/graph/ingest-pdfs
+Content-Type: multipart/form-data
+
+files: [PDF files]
+source: "research_papers"
+categories: "ai,research"
+author: "Research Team"
+metadata: {"project": "AI Research"}
 ```
 
 #### **Knowledge Query**
@@ -379,6 +399,11 @@ Content-Type: application/json
   "edits": "<required when feedback is 'edited'>",
   "knowledge_type": "conversational" | "reusable" | "verified"
 }
+```
+
+#### **Get Feedback Status**
+```http
+GET /smart-second-brain/api/v1/graph/feedback/{thread_id}
 ```
 
 ### API Response Format
