@@ -275,7 +275,8 @@ def query_knowledge(query: str, thread_id: str = None):
                 "answer": result.get("result", {}).get("generated_answer", "No answer generated"),
                 "execution_time": result.get("execution_time", 0),
                 "thread_id": result.get("thread_id", "unknown"),
-                "retrieved_docs": result.get("result", {}).get("retrieved_docs", [])
+                "retrieved_docs": result.get("result", {}).get("retrieved_docs", []),
+                "is_idk_response": result.get("result", {}).get("is_idk_response", False)
             }
         else:
             st.error(f"Error processing query: {result['error']}")
@@ -640,8 +641,8 @@ def main():
                         with st.container():
                             st.markdown("---")
                             
-                            # Check if this is an "I don't know" response
-                            is_idk = is_idk_response(chat["content"])
+                            # Check if this is an "I don't know" response using state property
+                            is_idk = chat.get("is_idk_response", False)
                             
                             if is_idk:
                                 # Special interface for "I don't know" responses
@@ -826,7 +827,8 @@ def main():
                         "execution_time": result["execution_time"],
                         "retrieved_docs": result["retrieved_docs"],
                         "thread_id": result.get("thread_id", "unknown"),
-                        "feedback_status": "pending"  # Mark as pending feedback
+                        "feedback_status": "pending",  # Mark as pending feedback
+                        "is_idk_response": result.get("is_idk_response", False)
                     })
                 else:
                     # Add error message

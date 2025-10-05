@@ -306,6 +306,28 @@ class KnowledgeState(BaseModel):
     - Feedback collection nodes for improvement
     """
     
+    is_idk_response: Optional[bool] = Field(
+        None, description="Whether the AI response indicates it doesn't know the answer."
+    )
+    """
+    Flag indicating if the AI response is an "I don't know" type response.
+    
+    This field is set by the answer generation node when the AI determines
+    that the retrieved context is insufficient to provide a confident answer.
+    It enables the frontend to provide appropriate UI for knowledge input
+    rather than standard feedback options.
+    
+    Values:
+        - True: AI indicates it doesn't know based on available knowledge
+        - False: AI provides a confident answer based on retrieved context
+        - None: Not yet determined or not applicable
+    
+    Used by:
+    - Frontend UI for conditional feedback interface
+    - Knowledge input workflows for IDK responses
+    - Analytics and monitoring of answer confidence
+    """
+    
     final_answer: Optional[str] = Field(
         None, description="Final, human-approved answer or summary."
     )

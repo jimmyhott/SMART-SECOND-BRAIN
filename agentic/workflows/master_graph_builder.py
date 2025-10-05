@@ -391,8 +391,25 @@ class MasterGraphBuilder:
                 "context": context
             })
 
-            # --- Update state with generated answer ---
-            state.generated_answer = response.content
+            # --- Parse JSON response to extract answer and metadata ---
+            import json
+            try:
+                # Try to parse as JSON first
+                response_data = json.loads(response.content)
+                state.generated_answer = response_data.get("answer", response.content)
+                state.is_idk_response = response_data.get("is_idk", False)
+                confidence = response_data.get("confidence", "unknown")
+                
+                # Log the confidence level
+                state.logs = (state.logs or []) + [f"✅ Generated answer with confidence: {confidence}"]
+                if state.is_idk_response:
+                    state.logs = (state.logs or []) + ["🤔 AI indicates it doesn't know based on available knowledge"]
+                
+            except (json.JSONDecodeError, TypeError):
+                # Fallback to plain text response
+                state.generated_answer = response.content
+                state.is_idk_response = False
+                state.logs = (state.logs or []) + ["⚠️ Received non-JSON response, using plain text"]
             
             # Initialize messages array if not exists
             if not state.messages:
