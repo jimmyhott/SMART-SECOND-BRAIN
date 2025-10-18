@@ -170,6 +170,22 @@ class SmartDocumentRetriever:
         except Exception as e:
             logger.error(f"❌ Failed to add documents: {e}")
 
+    def hydrate_bm25(self, documents: List[Document]) -> None:
+        """Hydrate the BM25 retriever from existing documents without mutating the vectorstore."""
+        if not documents:
+            return
+
+        try:
+            if self.bm25_retriever is None:
+                self.bm25_retriever = BM25Retriever.from_documents(documents)
+            else:
+                self.bm25_retriever.add_documents(documents)
+
+            self._update_ensemble_retriever()
+            logger.info("🔄 Hydrated BM25 retriever from persisted documents")
+        except Exception as exc:
+            logger.warning("BM25 hydration failed: %s", exc)
+
     def _update_ensemble_retriever(self):
         """Update the ensemble retriever with current retrievers."""
         if self.bm25_retriever:
@@ -203,21 +219,18 @@ class SmartDocumentRetriever:
         try:
             logger.info(f"🔍 Retrieving documents for: '{query}'")
 
+            # Prepare search kwargs for the base vector retriever
+            if filters:
+                self.vector_retriever.search_kwargs.update({"filter": filters})
+            self.vector_retriever.search_kwargs["k"] = k
+
             # Choose retrieval method
             if use_hybrid and self.ensemble_retriever:
-                retriever = self.ensemble_retriever
                 logger.info("🔄 Using hybrid retrieval (semantic + keyword)")
+                results = self.ensemble_retriever.get_relevant_documents(query)
             else:
-                retriever = self.vector_retriever
                 logger.info("🔄 Using semantic retrieval only")
-
-            # Apply filters if provided
-            if filters:
-                retriever.search_kwargs.update({"filter": filters})
-
-            # Perform retrieval
-            retriever.search_kwargs["k"] = k
-            results = retriever.get_relevant_documents(query)
+                results = self.vector_retriever.get_relevant_documents(query)
 
             # Convert to RetrievalResult objects
             retrieval_results = []

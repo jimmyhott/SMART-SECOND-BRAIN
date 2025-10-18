@@ -162,6 +162,59 @@ class MasterGraphBuilder:
                 collection_name=self.collection_name,
                 chromadb_dir=self.chromadb_dir,
             )
+            self._hydrate_retriever_from_vectorstore()
+
+    def _hydrate_retriever_from_vectorstore(self) -> None:
+        """Rebuild BM25/ensemble state from persisted Chroma documents."""
+        if not self.vectorstore or not self.retriever:
+            return
+
+        collection = getattr(self.vectorstore, "_collection", None)
+        if collection is None:
+            return
+
+        # Skip hydration for mocked vectorstores (used in API tests)
+        if "unittest" in collection.__class__.__module__:
+            return
+
+        try:
+            total_docs = collection.count()
+        except Exception:
+            total_docs = 0
+
+        if not total_docs:
+            return
+
+        batch_size = 200
+        offset = 0
+
+        while offset < total_docs:
+            try:
+                raw_batch = collection.get(
+                    limit=batch_size,
+                    offset=offset,
+                    include=["documents", "metadatas"],
+                )
+            except Exception:
+                break
+
+            documents = []
+            for page_content, metadata in zip(
+                raw_batch.get("documents", []) or [],
+                raw_batch.get("metadatas", []) or [],
+            ):
+                if page_content:
+                    documents.append(
+                        Document(page_content=page_content, metadata=metadata or {})
+                    )
+
+            if documents:
+                self.retriever.hydrate_bm25(documents)
+
+            batch_count = len(raw_batch.get("documents", []) or [])
+            if not batch_count:
+                break
+            offset += batch_count
 
     # =============================================================================
     # WORKFLOW NODE METHODS

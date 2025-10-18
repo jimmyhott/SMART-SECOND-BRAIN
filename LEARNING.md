@@ -35,7 +35,7 @@ Azure/OpenAI (embeddings + LLM) ────────────────
   - `chunk_doc_node`: Splits documents (RecursiveCharacterTextSplitter), assigns deterministic `doc_id` & `chunk_id`, stores metadata (source, knowledge type, char offsets).
   - `preprocess_node`: Optional step that validates user-supplied metadata or infers keywords/categories using lightweight text analysis.
   - `embed_node`: Calls embeddings (Azure/OpenAI), stores vectors alongside metadata.
-  - `store_node`: Transforms chunks + metadata into LangChain `Document` objects, assigns stable vector IDs (`doc_id::chunk_n`), writes them to ChromaDB, and forwards the same documents to `SmartDocumentRetriever` so dense and BM25 retrievers stay in sync.
+  - `store_node`: Transforms chunks + metadata into LangChain `Document` objects, assigns stable vector IDs (`doc_id::chunk_n`), writes them to ChromaDB, and forwards the same documents to `SmartDocumentRetriever` so dense and BM25 retrievers stay in sync; on initialization the retriever replays persisted Chroma documents to rebuild its BM25 index, keeping hybrid search available after restarts.
   - `retriever_node`: Accepts retrieval options (k, min_score, use_hybrid, rerank_top_k, metadata filters), logs results with provenance, and populates citation map.
   - `answer_gen_node`: Loads `agentic/prompts/answer_prompt.txt`, ensures the prompt contains the `citations` variable, invokes the LLM, and falls back to a structured “IDK” JSON payload on errors.
   - `human_review_node` & `validated_store_node`: Support human-in-the-loop review, approvals, edited answers, and optional storage of validated knowledge.
@@ -68,7 +68,7 @@ Azure/OpenAI (embeddings + LLM) ────────────────
 2. **Store Node Mechanics**
    - Converts chunk/metadata pairs into LangChain `Document` objects.
    - Persists to Chroma via `add_documents(documents, ids=ids)` ensuring we control vector IDs.
-   - Immediately mirrors the same documents into `SmartDocumentRetriever` so the dense and BM25 retrievers are always aligned.
+   - Immediately mirrors the same documents into `SmartDocumentRetriever` so the dense and BM25 retrievers are always aligned; on initialization the retriever rehydrates BM25 from persisted documents so hybrid retrieval is ready even without a fresh ingest.
 3. **ChromaDB Configuration**
    - Per-collection persistence directory (`./chroma_db/<collection>`), enabling multi-tenant knowledge bases.
    - Metadata is stored alongside embeddings, enabling filters (`source`, `categories`, `knowledge_type`).
@@ -111,7 +111,7 @@ Azure/OpenAI (embeddings + LLM) ────────────────
 - **Auto Metadata Preprocessing**: If `auto_preprocess` is true, `preprocess_node` checks for existing metadata, invokes spaCy (`en_core_web_sm`) to lemmatize the document, filters out scikit-learn English stopwords, and infers keywords/categories. Results are merged with caller metadata. If spaCy isn't installed, a regex-based tokenizer provides a fallback so ingestion isn't blocked. When auto preprocessing is off and no metadata is supplied, ingestion short-circuits with `status="skipped_no_metadata"`.
 - **Chunking**: `RecursiveCharacterTextSplitter` creates 500-character chunks with 50-character overlap. Each chunk inherits deterministic `doc_id`/`chunk_id`, character offsets, categories, keywords, knowledge type, ingestion timestamp, and source, captured in `state.chunk_metadata` for later filtering and citation mapping.
 - **Embedding**: Azure/OpenAI embeddings (`text-embedding-3-small` by default) transform chunks into vectors. Failures fallback to placeholder vectors so the pipeline remains testable.
-- **Vector Storage**: `store_node` serializes metadata into scalar-friendly strings, persists chunks to ChromaDB via deterministic IDs, and mirrors the same documents into `SmartDocumentRetriever` so dense and BM25 modes stay synchronized.
+- **Vector Storage**: `store_node` serializes metadata into scalar-friendly strings, persists chunks to ChromaDB via deterministic IDs, mirrors the same documents into `SmartDocumentRetriever`, and the retriever rehydrates its BM25 index from persisted documents during initialization so hybrid search stays available after restarts.
 - **Completion**: Workflow logs chunk counts, embedding status, and returns final `KnowledgeState.status` (`stored`, `validated`, `error`, etc.). Human-in-the-loop nodes can pause/resume the flow for approvals.
 
 ### 4.2 Query Workflow (RAG Loop)

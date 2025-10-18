@@ -150,7 +150,7 @@ curl -X POST "http://localhost:8000/smart-second-brain/api/v1/graph/query" \
 ### Embedding & Storage
 - Embeddings default to Azure/OpenAI's `text-embedding-3-small` deployment. Errors are logged and replaced with dummy vectors to keep workflows moving.
 - Chunks + metadata are normalized (lists serialized to comma-separated strings) before being written to ChromaDB.
-- After persistence, the same `Document` objects are fed to `SmartDocumentRetriever`, ensuring the semantic and BM25 retrievers stay synchronized.
+- After persistence, the same `Document` objects are fed to `SmartDocumentRetriever`, ensuring the semantic and BM25 retrievers stay synchronized. On startup the retriever re-hydrates its BM25 index directly from the persisted Chroma documents, so hybrid retrieval is immediately available even before new ingests.
 
 ### Retrieval
 - Hybrid strategy (semantic + optional BM25) is used when the `rank_bm25` package is installed; otherwise, pure vector search runs.
